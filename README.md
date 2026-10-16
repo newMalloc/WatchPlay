@@ -19,26 +19,38 @@
 
 ## 架构
 
-```
-手机端 (Android)                              手表端 (ESP32-S3 等)
-┌──────────────────────────────┐              ┌──────────────────────────┐
-│ HTML+CSS 手表 UI             │              │  传输层                  │
-│      │ WebView               │              │      │                   │
-│      ▼                       │              │      ▼                   │
-│  OpenGL 绘制到纹理            │              │  协议解包 / 重组          │
-│      │                       │              │      │                   │
-│      ▼                       │              │      ▼                   │
-│  MediaCodec 编码             │   BLE        │  解码 (JPEG硬解/H.264)    │
-│  (JPEG / H.264)              │◄────────────►│      │                   │
-│      │                       │  GATT/CoC    │      ▼                   │
-│  协议封装 / Credit 流控       │              │  PSRAM 双缓冲            │
-│      │                       │              │      │  (TE 同步)        │
-│      ▼                       │              │      ▼                   │
-│  TransportModule             │              │  466×466 圆屏            │
-│      ▲                       │              │      │                   │
-│      │                       │              │      ▼                   │
-│  触控映射 → 注入 WebView      │              │  触控采集 (FT3168)        │
-└──────────────────────────────┘              └──────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph phone["手机端 (Android)"]
+        direction TB
+        ui["HTML + CSS 手表 UI"]
+        gl["OpenGL 绘制到纹理"]
+        codec["MediaCodec 编码<br/>JPEG / H.264"]
+        framing["协议封装 / Credit 流控"]
+        tx["TransportModule"]
+        touchmap["触控映射"]
+        inject["注入 WebView"]
+
+        ui -->|WebView 捕获| gl --> codec --> framing --> tx
+        tx -. 触控回传 .-> touchmap --> inject
+        inject -.-> ui
+    end
+
+    subgraph watch["手表端 (ESP32-S3 等)"]
+        direction TB
+        bearer["传输层"]
+        reassemble["协议解包 / 重组"]
+        decode["解码<br/>JPEG 硬解 / H.264"]
+        psram["PSRAM 双缓冲<br/>TE 同步"]
+        panel["466×466 圆屏"]
+        touch["触控采集 (FT3168)"]
+
+        bearer --> reassemble --> decode --> psram --> panel
+        panel -.- touch
+        touch -. 上行触控 .-> bearer
+    end
+
+    tx <-->|BLE · GATT / CoC| bearer
 ```
 
 音频：ESP32-S3 无经典蓝牙，不支持 A2DP，音频由手机本地播放。带经典蓝牙的芯片（如炬芯 ATS3089）可走 A2DP 独立链路。
