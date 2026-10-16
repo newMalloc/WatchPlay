@@ -6,7 +6,7 @@
 
 - [在开始之前](#在开始之前)
 - [开发环境](#开发环境)
-- [协议变更流程](#协议变更流程)
+- [协议变更](#协议变更)
 - [代码规范](#代码规范)
 - [提交与 PR](#提交与-pr)
 - [测试要求](#测试要求)
@@ -14,13 +14,11 @@
 
 ## 在开始之前
 
-WatchPlay 是一套**协议标准**，不只是几个 App。这意味着：
+WatchPlay 主要是协议标准，代码是它的参考实现。两点影响你怎么提改动：
 
-- **协议是契约**。一旦有第三方按某个版本实现了固件，改动协议的代价会指数上升。因此协议的改动门槛显著高于代码。
-- **能不改协议就不改**。绝大多数需求可以通过厂商私有空间（`0x80`–`0xFF`）或一个新的可选 TLV 解决。
-- **我们优先要能跑通的最小实现**，而不是功能完备的设计。参考实现的目标是证明协议可行，不是做成产品。
-
-如果你不确定某个想法该不该提，**先开 Issue 讨论**，不要直接写 PR。
+- 协议改动比代码改动贵。第三方一旦按某个版本写了固件，改协议就要考虑他们。
+- 所以需求先看能不能落在厂商私有空间（`0x80`–`0xFF`）或一个新的可选 TLV 里，不必动标准区。相关约束见 [07-capabilities.md](docs/spec/07-capabilities.md)。
+- 参考实现的目标是证明协议可行，够用即可，不追求功能完备。
 
 ## 开发环境
 
@@ -67,26 +65,18 @@ idf.py build
 idf.py -p COM<N> flash monitor
 ```
 
-## 协议变更流程
+## 协议变更
 
-协议改动 **必须** 按此顺序进行，缺一步的 PR 会被直接退回：
+改协议前先在 [docs/spec/07-capabilities.md](docs/spec/07-capabilities.md) 登记编号，避免和其他人的分配撞车。改动和这些一起提交：
 
-1. **开 Issue**，说明要解决的问题。**不要**先写代码。
-2. **登记编号**。任何新增的 `FrameType` / TLV `type` / `CONTROL opcode` / `BYE reason` / `flags` 位，先在 [docs/spec/07-capabilities.md](docs/spec/07-capabilities.md) 的注册表里登记，避免编号冲突。
-3. **论证现有扩展点不够用**。说明为什么厂商私有空间（`0x80`–`0xFF`）无法解决。
-4. **做兼容性分析**，逐项检查 [07-capabilities.md §4.2](docs/spec/07-capabilities.md) 的"向后兼容"表。
-5. **更新 [99-changelog.md](docs/spec/99-changelog.md)**。
-6. **加实现与测试**：在 `tools/` 的参考实现中加入编解码路径，在 `tools/test_protocol.py` 中加断言。
-7. **加 trace**：在 `examples/protocol-traces/` 中加入一个可解析的字节级样例（由 `tools/gen_traces.py` 生成）。
+- 规范文本
+- [99-changelog.md](docs/spec/99-changelog.md) 的对应条目
+- `tools/watchplay_proto.py` 的实现
+- `tools/test_protocol.py` 的断言，以及 `examples/protocol-traces/` 里一条可解析的样例
 
-### 明确不做的事
+不确定设计怎么定就先开 Issue 聊，不用先写代码——多数需求能落在厂商私有空间（`0x80`–`0xFF`）里先验证，不必动标准区。
 
-| 不做 | 原因 |
-| :--- | :--- |
-| 在 1.0 之前修改帧头布局 | 见 [02-wire-format.md §9](docs/spec/02-wire-format.md)。会让所有已出货固件失联 |
-| 在标准空间里塞厂商语义 | 用 `0x80`–`0xFF` |
-| 为"以后可能需要"预留字段 | 未使用的字段同样要维护和测试 |
-| 让新字段成为必需项而不提供降级路径 | 会破坏前向兼容 |
+设计约束（帧头布局冻结、厂商空间的使用方式、兼容性要求）都是规范内容，见 [07-capabilities.md](docs/spec/07-capabilities.md) 与 [02-wire-format.md §9](docs/spec/02-wire-format.md)。
 
 ## 代码规范
 
@@ -162,11 +152,11 @@ Refs: #12
 
 ### PR 要求
 
-- 一个 PR 做一件事。协议改动与代码改动 **应当**分开提交，便于回溯。
-- 描述里写清：**改了什么、为什么、怎么验证的**。
+- 一个 PR 做一件事。协议改动与代码改动尽量分开提交，便于回溯。
+- 描述里写清：改了什么、为什么、怎么验证的。
 - 说明测试情况。没跑测试就写清没跑，以及原因。
-- 涉及协议或共享接口的改动需更新对应文档。没有文档的协议改动不会被合并。
-- 保持 PR 小。超过 500 行的 PR 请先开 Issue 讨论拆分。
+- 涉及协议或共享接口的改动，一并更新对应文档。
+- 保持 PR 小。超过 500 行的 PR 建议先开 Issue 讨论拆分。
 
 ## 测试要求
 
@@ -184,7 +174,7 @@ Refs: #12
 
 ### 关于 `TestFrozenConstants`
 
-不要为了提高通过率而放宽 `tools/test_protocol.py` 里的 `TestFrozenConstants`。线值一旦发布就可能已被固件实现，改动需要走[协议变更流程](#协议变更流程)并更新 [99-changelog.md](docs/spec/99-changelog.md)。
+不要为了提高通过率而放宽 `tools/test_protocol.py` 里的 `TestFrozenConstants`。线值一旦发布就可能已被固件实现，改动需要走[协议变更](#协议变更)并更新 [99-changelog.md](docs/spec/99-changelog.md)。
 
 ## 许可证与署名
 
