@@ -4,7 +4,7 @@
 
 它不是"顺手写的脚本"，而是规范的一部分：`docs/spec/` 里每一个字节级断言，都应该能在这里找到对应的代码或测试。如果规范和代码打架，**规范赢，代码是 bug**——但这同时意味着规范里的每个数字都必须是可验证的。
 
-**硬约束：只使用 Python 标准库。** 不装任何依赖就能跑，这是刻意的。一个需要 `pip install` 的"参考实现"在 CI 里、在别人的机器上、在两年后都会变成跑不起来的东西。这条约束由 `test_protocol.py` 中的 `TestToolsAreStdlibOnly` 强制检查（用 `ast` 解析真实导入，而不是正则匹配文本）。
+`tools/` 只使用 Python 标准库，不装任何依赖就能跑。这条约束由 `test_protocol.py` 中的 `TestToolsAreStdlibOnly` 检查（用 `ast` 解析真实导入，而不是正则匹配文本）。
 
 ## 文件
 
@@ -15,7 +15,7 @@
 | [`analyze_stream.py`](analyze_stream.py) | 抓包分析器：帧类型直方图、CRC 错误、重同步、**off-by-20 分块诊断**、Credit 流、实测帧率与开销。 |
 | [`test_protocol.py`](test_protocol.py) | 41 项一致性测试，含"冻结常量"与示例场景校验。 |
 | [`lint_scenes.py`](lint_scenes.py) | 校验 `examples/watch-ui/` 的场景符合渲染规范：触控目标 ≥ 7 mm、安全区用 `vmin`、背景不透明、无外部资源、无滚动。 |
-| [`check_doc_links.py`](check_doc_links.py) | 校验 `docs/` 里的相对链接都能解析。跨引用 404 的规范比没有规范更糟。 |
+| [`check_doc_links.py`](check_doc_links.py) | 校验 `docs/` 里的相对链接与页内锚点。 |
 
 ## 常用命令
 
@@ -92,4 +92,4 @@ chunking check:
 3. 跑 `python tools/test_protocol.py` —— `TestFrozenConstants` 会拦住静默改线值的操作
 4. 若改了取值的含义，更新 `docs/spec/99-changelog.md`
 
-**线值和交易代码一样，是不可重构的。** 它们已经被烧进可能已出货的固件里了——`TestFrozenConstants` 存在的唯一理由就是让"顺手调整一下编号"这件事在 CI 里失败。
+线值一旦发布就不能随意更改：可能已有固件按它实现。`TestFrozenConstants` 就是为此存在。

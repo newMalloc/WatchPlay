@@ -72,7 +72,7 @@ idf.py -p COM<N> flash monitor
 协议改动 **必须** 按此顺序进行，缺一步的 PR 会被直接退回：
 
 1. **开 Issue**，说明要解决的问题。**不要**先写代码。
-2. **登记编号**。任何新增的 `FrameType` / TLV `type` / `CONTROL opcode` / `BYE reason` / `flags` 位，**必须**先在 [docs/spec/07-capabilities.md](docs/spec/07-capabilities.md) 的注册表里登记，避免编号冲突。编号冲突是协议腐化的头号原因。
+2. **登记编号**。任何新增的 `FrameType` / TLV `type` / `CONTROL opcode` / `BYE reason` / `flags` 位，先在 [docs/spec/07-capabilities.md](docs/spec/07-capabilities.md) 的注册表里登记，避免编号冲突。
 3. **论证现有扩展点不够用**。说明为什么厂商私有空间（`0x80`–`0xFF`）无法解决。
 4. **做兼容性分析**，逐项检查 [07-capabilities.md §4.2](docs/spec/07-capabilities.md) 的"向后兼容"表。
 5. **更新 [99-changelog.md](docs/spec/99-changelog.md)**。
@@ -85,7 +85,7 @@ idf.py -p COM<N> flash monitor
 | :--- | :--- |
 | 在 1.0 之前修改帧头布局 | 见 [02-wire-format.md §9](docs/spec/02-wire-format.md)。会让所有已出货固件失联 |
 | 在标准空间里塞厂商语义 | 用 `0x80`–`0xFF` |
-| 为"以后可能需要"预留字段 | 未使用的字段是负债，不是资产 |
+| 为"以后可能需要"预留字段 | 未使用的字段同样要维护和测试 |
 | 让新字段成为必需项而不提供降级路径 | 会破坏前向兼容 |
 
 ## 代码规范
@@ -164,8 +164,8 @@ Refs: #12
 
 - 一个 PR 做一件事。协议改动与代码改动 **应当**分开提交，便于回溯。
 - 描述里写清：**改了什么、为什么、怎么验证的**。
-- **必须**说明测试情况。如果没跑测试，**明确说明没跑以及原因**——隐瞒未验证状态比没测试更糟。
-- 涉及协议或共享接口的改动 **必须**更新对应文档。没有文档的协议改动不会被合并。
+- 说明测试情况。没跑测试就写清没跑，以及原因。
+- 涉及协议或共享接口的改动需更新对应文档。没有文档的协议改动不会被合并。
 - 保持 PR 小。超过 500 行的 PR 请先开 Issue 讨论拆分。
 
 ## 测试要求
@@ -180,11 +180,11 @@ Refs: #12
 | `android/sdk` | `./gradlew :sdk:test` 通过 |
 | `watch/` | `idf.py build` 通过；涉及协议的改动要附实测延迟/帧率 |
 
-**新增协议特性的 PR 必须带一个能在没有任何硬件的情况下跑通的测试。** 这是 `tools/` 存在的全部理由：让协议正确性可以被 CI 验证。
+新增协议特性的 PR 需带一个不需要硬件就能跑通的测试，这样协议正确性可以由 CI 验证。
 
-### 一条硬规矩
+### 关于 `TestFrozenConstants`
 
-**禁止** 为了提高通过率而放宽 `tools/test_protocol.py` 里的 `TestFrozenConstants`。那些断言存在的唯一目的，就是让"顺手调整一下线值"在 CI 里失败。线值和交易代码一样不可重构——它们已经烧进可能已出货的固件里了。若确实需要改线值，走[协议变更流程](#协议变更流程)并同时更新 [99-changelog.md](docs/spec/99-changelog.md)。
+不要为了提高通过率而放宽 `tools/test_protocol.py` 里的 `TestFrozenConstants`。线值一旦发布就可能已被固件实现，改动需要走[协议变更流程](#协议变更流程)并更新 [99-changelog.md](docs/spec/99-changelog.md)。
 
 ## 许可证与署名
 
