@@ -1,0 +1,28 @@
+# WatchPlay — git attributes.
+#
+# The protocol traces and the Gradle wrapper JAR are committed binaries. Without
+# these declarations git may treat them as text and rewrite line endings on
+# checkout, which corrupts the byte-for-byte agreement between
+# docs/spec/02-wire-format.md and the committed traces. CI verifies that
+# agreement, so a silent normalisation would show up as a puzzling red build on
+# a machine whose core.autocrlf differs from yours.
+
+# Committed protocol traces: the ground truth for parser conformance tests.
+*.bin binary
+examples/protocol-traces/*.bin -text -diff
+
+# Gradle wrapper must stay byte-identical to the upstream distribution.
+*.jar binary
+
+# Keep spec source files as LF everywhere so the quoted hex dumps and tables
+# diff cleanly across platforms.
+*.md text eol=lf
+*.py text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# Windows-only launcher scripts keep CRLF.
+*.bat text eol=crlf
+gradlew text eol=lf

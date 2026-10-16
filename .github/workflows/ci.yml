@@ -49,10 +49,16 @@ jobs:
   android:
     name: Android SDK build
     runs-on: ubuntu-latest
-    # Non-blocking: the SDK compiles and its 65 JVM unit tests pass locally
-    # (Gradle 9.3.1 / AGP 9.1 / JDK 17), but this matrix has not been observed
+    # Non-blocking: this module compiles and its 65 JVM unit tests pass locally
+    # (Gradle 9.3.1 / AGP 9.1 / JDK 17), but the matrix has not been observed
     # green on a clean runner yet. Flip to blocking once it is.
     continue-on-error: true
+    env:
+      # GitHub's ubuntu runners ship the Android SDK preinstalled here. We rely
+      # on that instead of android-actions/setup-android@v3, which currently
+      # fails with "Failed to find package 'tools'" before any of our code runs.
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -61,9 +67,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
-
       - uses: gradle/actions/setup-gradle@v4
+
+      # :sdk targets compileSdk 34. Install it only if the image lacks it, so a
+      # runner image bump cannot silently break the build.
+      - name: Ensure platform 34 + build-tools 34 are present
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n1)"
+          if [ ! -d "$ANDROID_HOME/platforms/android-34" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+          else
+            echo "platforms/android-34 already present"
+          fi
 
       - name: Build and test
         working-directory: android

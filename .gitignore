@@ -54,10 +54,17 @@ managed_components/
 dependencies.lock
 build/
 watch/build/
-*.bin
-*.elf
-*.map
-*.lst
+# Firmware build outputs. Scoped to watch/ on purpose: a bare `*.bin` here
+# silently swallowed examples/protocol-traces/*.bin, which are the committed
+# gold-standard byte traces the spec and its tests depend on. Never widen these
+# back to a bare extension glob.
+watch/**/*.bin
+watch/**/*.elf
+watch/**/*.map
+watch/**/*.lst
+
+# ---- Protocol traces: these ARE committed, do not ignore ----
+!examples/protocol-traces/*.bin
 
 # ---- IDE / editors ----
 .idea/

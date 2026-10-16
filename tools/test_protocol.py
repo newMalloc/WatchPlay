@@ -229,12 +229,52 @@ class TestStreamParser(unittest.TestCase):
 
 
 class TestGeneratedTraces(unittest.TestCase):
-    """The committed traces in examples/ must parse exactly as documented."""
+    """The committed traces in examples/ must parse exactly as documented.
+
+    `skipTest` is deliberately NOT used for the two normative trace files. An
+    earlier revision skipped when a trace was absent, which let a `.gitignore`
+    rule that swallowed `*.bin` turn a real CI failure into a green local run --
+    the traces were never committed at all and nothing complained. For files the
+    spec depends on, absent is a failure, not a skip.
+    """
+
+    NORMATIVE = ("mjpeg-frame-466x466-3c.bin", "session-handshake.bin")
+
+    def test_normative_traces_are_present_and_tracked(self):
+        for name in self.NORMATIVE:
+            path = TRACES / name
+            with self.subTest(trace=name):
+                self.assertTrue(path.exists(), f"{path} is missing; run tools/gen_traces.py")
+                self.assertGreater(path.stat().st_size, 0, f"{path} is empty")
+
+    def test_normative_traces_are_tracked_by_git(self):
+        """A trace that exists locally but is git-ignored will not reach CI.
+
+        This is the exact failure that shipped: `.gitignore` had a bare `*.bin`
+        meant for ESP-IDF firmware images, which silently excluded the traces
+        from every commit while they sat happily in the working tree.
+        """
+        import subprocess
+
+        if not (REPO / ".git").exists():
+            self.skipTest("not a git worktree (e.g. source tarball)")
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", *[f"examples/protocol-traces/{n}" for n in self.NORMATIVE]],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            "normative traces are not tracked by git -- they will be missing in CI. "
+            f"Likely a .gitignore rule is excluding them.\n{result.stderr.strip()}",
+        )
 
     def _load(self, name: str) -> bytes:
         p = TRACES / name
-        if not p.exists():
-            self.skipTest(f"{p} not generated; run tools/gen_traces.py")
+        self.assertTrue(p.exists(), f"{p} missing; run tools/gen_traces.py")
         return p.read_bytes()
 
     def test_mjpeg_frame_reassembles(self):
@@ -479,6 +519,7 @@ class TestToolsAreStdlibOnly(unittest.TestCase):
         "pathlib",
         "re",
         "struct",
+        "subprocess",
         "sys",
         "typing",
         "unicodedata",
