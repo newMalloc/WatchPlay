@@ -283,7 +283,7 @@ class MirrorPipeline(
         counters.chunks.addAndGet(sentChunks.toLong())
         lastCaptureNs = captureResult.timestampNs
         val latencyMs = (MonotonicClock.nowMs() - captureResult.timestampNs / 1_000_000L).toDouble()
-        rollWindow(nowMs, bytes = encoded.sizeBytes, latencyMs = latencyMs)
+        rollWindow(nowMs, bytes = encoded.sizeBytes.toLong(), latencyMs = latencyMs)
         return true
     }
 

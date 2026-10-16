@@ -22,6 +22,7 @@ from watchplay_proto import (  # noqa: E402
     DEFAULT_MAX_CHUNK_BYTES,
     DEFAULT_ROUND_SAFE_INSET_PERMILLE,
     DEFAULT_SQUARE_SAFE_INSET_PERMILLE,
+    FEEDBACK_FIELDS,
     FEEDBACK_PAYLOAD_BYTES,
     HEADER_SIZE,
     HELLO_ACK_PAYLOAD_BYTES,
@@ -30,10 +31,12 @@ from watchplay_proto import (  # noqa: E402
     PROTOCOL_VERSION,
     RESULT_TLV_BYTES,
     STREAM_TLV_BYTES,
+    TOUCH_FIELDS,
     TOUCH_PAYLOAD_BYTES,
     VENDOR_TYPE_BASE,
     VIDEO_CODEC_H264,
     VIDEO_CODEC_MJPEG,
+    VIDEO_SUBHEADER_FIELDS,
     VIDEO_SUBHEADER_SIZE,
     Flags,
     FrameType,
@@ -359,11 +362,46 @@ class TestFrozenConstants(unittest.TestCase):
         self.assertEqual(DEFAULT_MAX_CHUNK_BYTES, 244)
         # docs/spec/03-session.md section 1
         self.assertEqual(TOUCH_PAYLOAD_BYTES, 14)
-        self.assertEqual(FEEDBACK_PAYLOAD_BYTES, 20)
+        self.assertEqual(FEEDBACK_PAYLOAD_BYTES, 22)
         self.assertEqual(HELLO_PAYLOAD_BYTES, 52)
         self.assertEqual(HELLO_ACK_PAYLOAD_BYTES, 24)
         self.assertEqual(RESULT_TLV_BYTES, 24)
         self.assertEqual(STREAM_TLV_BYTES, 12)
+
+    def test_field_tables_sum_to_declared_sizes(self):
+        """A declared size must equal its field table's sum.
+
+        This is the check whose absence let FEEDBACK ship labelled 20 bytes
+        while its own table summed to 22 -- which would overrun a 20-byte
+        buffer when writing `last_frame_id` at offset 18. Never assert a size
+        by memory; derive it.
+        """
+        for label, declared, fields in (
+            ("FEEDBACK", FEEDBACK_PAYLOAD_BYTES, FEEDBACK_FIELDS),
+            ("TOUCH", TOUCH_PAYLOAD_BYTES, TOUCH_FIELDS),
+            ("VIDEO sub-header", VIDEO_SUBHEADER_SIZE, VIDEO_SUBHEADER_FIELDS),
+        ):
+            with self.subTest(table=label):
+                total = sum(width for _name, width in fields)
+                self.assertEqual(
+                    total,
+                    declared,
+                    f"{label}: field table sums to {total} but the spec declares {declared}",
+                )
+
+    def test_field_offsets_follow_the_table(self):
+        # Offsets are cumulative and start at 0; no implicit padding anywhere.
+        for label, fields in (
+            ("FEEDBACK", FEEDBACK_FIELDS),
+            ("TOUCH", TOUCH_FIELDS),
+            ("VIDEO sub-header", VIDEO_SUBHEADER_FIELDS),
+        ):
+            with self.subTest(table=label):
+                offset = 0
+                for name, width in fields:
+                    self.assertIn(width, (1, 2, 4), f"{label}.{name} has a non-wire width {width}")
+                    offset += width
+                self.assertEqual(offset, sum(w for _n, w in fields))
 
     def test_vendor_type_boundary(self):
         # docs/spec/02-wire-format.md section 3

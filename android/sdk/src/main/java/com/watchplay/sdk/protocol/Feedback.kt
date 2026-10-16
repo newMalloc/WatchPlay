@@ -1,7 +1,7 @@
 package com.watchplay.sdk.protocol
 
 /**
- * `FEEDBACK` — the watch's credit grant and status report (`04-video.md` §4.2), fixed 20 bytes.
+ * `FEEDBACK` — the watch's credit grant and status report (`04-video.md` §4.2).
  *
  * ## `credits` is an **absolute** value
  *
@@ -15,6 +15,23 @@ package com.watchplay.sdk.protocol
  * The sender therefore does **not** add [credits] to anything — it **replaces** its window with it.
  * `01-transport.md` §6.1 is emphatic that the initial window comes only from the explicit
  * `CAPS_ACK.RESULT.initial_credits` grant: there is no implicit "assume 64 until told otherwise".
+ *
+ * ## SPEC CONFLICT: 20 bytes or 22?
+ *
+ * `04-video.md` §4.2 is titled "定长 20 字节" (fixed 20 bytes), and `02-wire-format.md` §6 and
+ * `01-transport.md` §6 both say 20 — but the field table in that very section adds up to **22**:
+ *
+ * ```
+ * 0..3 credits (u32)  4..7 frames_decoded (u32)  8..11 frames_dropped (u32)
+ * 12..13 decode_ms_avg (u16)  14..15 queue_depth (u16)
+ * 16 last_frame_status (u8)   17 flags (u8)      18..21 last_frame_id (u32)   => 22 bytes
+ * ```
+ *
+ * This SDK follows the **field table** (every offset and width is individually specified, and that is
+ * what an implementer codes against) and therefore emits [SIZE_BYTES] = 22. To stay interoperable with
+ * an implementation that follows the 20-byte prose, [decode] also accepts a 20-byte payload and treats
+ * the missing `last_frame_id` as [NO_FRAME_ID]. This needs a decision from the spec maintainer; it is
+ * recorded in the project report.
  *
  * @property credits currently available chunks (absolute, u32).
  * @property framesDecoded cumulative successfully decoded frames.
@@ -79,15 +96,30 @@ data class Feedback(
             "status=${LastFrameStatus.describe(lastFrameStatus)}, " +
             "flags=0x%02X, lastFrame=$lastFrameId)".format(flags)
     companion object {
-        /** Fixed payload size (`04-video.md` §4.2). */
-        const val SIZE_BYTES: Int = ProtocolLimits.FEEDBACK_PAYLOAD_SIZE
+        /**
+         * Size this implementation writes: the field table of `04-video.md` §4.2, which adds up to 22
+         * bytes even though the surrounding prose says 20. See the class documentation.
+         */
+        const val SIZE_BYTES: Int = ProtocolLimits.FEEDBACK_FIELD_TABLE_SIZE
+
+        /**
+         * Size an implementation that followed the "20-byte" prose would send. Accepted on receive for
+         * interoperability; the missing `last_frame_id` is reported as [NO_FRAME_ID].
+         */
+        const val LEGACY_SIZE_BYTES: Int = ProtocolLimits.FEEDBACK_PAYLOAD_SIZE
 
         /** `last_frame_id` value meaning "no frame decoded yet". */
         const val NO_FRAME_ID: Long = 0xFFFFFFFFL
 
-        /** Parses a `FEEDBACK` payload. */
+        /**
+         * Parses a `FEEDBACK` payload.
+         *
+         * Accepts both [SIZE_BYTES] (this implementation, and the field table) and [LEGACY_SIZE_BYTES]
+         * (the prose figure) so that a peer which truncated the last field still works.
+         */
         fun decode(data: ByteArray, offset: Int = 0): Feedback {
-            LittleEndian.requireRange(data, offset, SIZE_BYTES)
+            LittleEndian.requireRange(data, offset, LEGACY_SIZE_BYTES)
+            val available = data.size - offset
             return Feedback(
                 credits = LittleEndian.readU32(data, offset),
                 framesDecoded = LittleEndian.readU32(data, offset + 4),
@@ -96,7 +128,11 @@ data class Feedback(
                 queueDepth = LittleEndian.readU16(data, offset + 14),
                 lastFrameStatus = LittleEndian.readU8(data, offset + 16),
                 flags = LittleEndian.readU8(data, offset + 17),
-                lastFrameId = LittleEndian.readU32(data, offset + 18),
+                lastFrameId = if (available >= SIZE_BYTES) {
+                    LittleEndian.readU32(data, offset + 18)
+                } else {
+                    NO_FRAME_ID
+                },
             )
         }
     }

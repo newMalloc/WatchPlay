@@ -75,7 +75,7 @@ def crc16_ccitt_false(data: bytes) -> int:
 | `0x06` | `VIDEO_END` | Source → Sink | 0 | 一帧的最后一个分块的简洁标记（可选优化，见下） |
 | `0x07` | `TOUCH` | Sink → Source | 14 | 触控事件，结构见 [05-input.md](05-input.md) |
 | `0x08` | `CONTROL` | 双向 | 变长 | 会话控制命令，见 [03-session.md](03-session.md) |
-| `0x09` | `FEEDBACK` | Sink → Source | 20 | 接收端状态与 Credit 授予，见 [04-video.md](04-video.md) |
+| `0x09` | `FEEDBACK` | Sink → Source | 22 | 接收端状态与 Credit 授予，结构见 [04-video.md §4.2](04-video.md) |
 | `0x0A` | `PING` | 双向 | 0 或变长 | 心跳请求 |
 | `0x0B` | `PONG` | 双向 | 0 或变长 | 心跳响应 |
 | `0x0C` | `BYE` | 双向 | 变长 | 优雅断开，携带原因码 |
@@ -138,7 +138,7 @@ def seq_after(a: int, b: int) -> bool:
 | `HELLO` / `HELLO_ACK` | 128 字节 | 固定结构 + 有限 TLV |
 | `CAPS` / `CAPS_ACK` | 128 字节 | 同上 |
 | `TOUCH` | 14 字节 | 定长 |
-| `FEEDBACK` | 20 字节 | 定长 |
+| `FEEDBACK` | 22 字节 | 定长（字段表见 [04-video.md §4.2](04-video.md)） |
 | `CONTROL` | 64 字节 | 定长命令 + 短参数 |
 | `VIDEO` 单块负载 | **协商值**，默认 ≤ 244 字节 | 受 BLE MTU 限制，见 [01-transport.md](01-transport.md) |
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The demo deliberately uses a stock AppCompat theme: no extra dependency, no invented parent, and
+      `DayNight` means the demo follows the system theme like any other AppCompat app.
+    -->
+    <style name="Theme.WatchPlay.Demo" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>

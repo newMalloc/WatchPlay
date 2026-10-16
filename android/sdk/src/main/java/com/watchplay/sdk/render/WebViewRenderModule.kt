@@ -27,7 +27,7 @@ import com.watchplay.sdk.touch.TouchAction
  *    normative: the phone injects the watch's own `safe_inset_permille` **verbatim** as
  *    `--wp-safe-inset: (safe_inset_permille / 10)vmin` (note `vmin`, not `%`) together with
  *    `data-screen-shape`, and must not substitute a hard-coded margin. This implementation rewrites the
- *    scene's `/*WP_INJECT*/` marker — the fallback the specification itself defines — because that path
+ *    scene's [INJECTION_MARKER] — the fallback the specification itself defines — because that path
  *    needs no extra dependency. The preferred `WebViewCompat.addDocumentStartJavaScript` path lives in
  *    `androidx.webkit`, which `:sdk` does not depend on yet; see the TODO below.
  *  * [dispatchTouch] injects native [MotionEvent]s, as `05-input.md` §2.4 requires.
@@ -231,8 +231,9 @@ class WebViewRenderModule(
      * `--wp-safe-inset: (safe_inset_permille / 10)vmin`, injected verbatim, plus
      * `data-screen-shape` on `<html>` so one document can serve round and square panels (§3.4).
      *
-     * Scene authors put `/*WP_INJECT*​/` inside `:root{...}`; when the marker is absent the values are
-     * prepended as a style attribute on `<html>`, which still applies before the first paint.
+     * Scene authors place [INJECTION_MARKER] inside `:root{...}`; when the marker is absent the values
+     * are prepended as a `style` attribute on the `html` element, which still applies before the first
+     * paint.
      */
     internal fun injectNegotiatedCss(html: String, layout: WatchLayoutSpec): String {
         val declarations = "--wp-safe-inset:${layout.cssSafeInsetValue};"

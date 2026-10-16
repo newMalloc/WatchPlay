@@ -123,7 +123,7 @@ data class DeviceInfo(
         LittleEndian.writeU8(out, 1, fwMajor)
         LittleEndian.writeU8(out, 2, fwMinor)
         LittleEndian.writeU8(out, 3, fwPatch)
-        chipId.copyInto(out, destinationOffset = 4, endIndex = 12)
+        chipId.copyInto(out, destinationOffset = 4, startIndex = 0, endIndex = SIZE_BYTES_CHIP_ID)
         LittleEndian.writeU32(out, 12, buildId)
         return out
     }

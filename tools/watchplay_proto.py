@@ -63,11 +63,52 @@ DEFAULT_INITIAL_CREDITS: Final[int] = 64
 
 #: Fixed payload sizes promised by the spec (spec 02 section 6, spec 03 sections 2 and 3).
 TOUCH_PAYLOAD_BYTES: Final[int] = 14
-FEEDBACK_PAYLOAD_BYTES: Final[int] = 20
+FEEDBACK_PAYLOAD_BYTES: Final[int] = 22
 HELLO_PAYLOAD_BYTES: Final[int] = 52
 HELLO_ACK_PAYLOAD_BYTES: Final[int] = 24
 RESULT_TLV_BYTES: Final[int] = 24
 STREAM_TLV_BYTES: Final[int] = 12
+
+#: Field layout of FEEDBACK (spec 04 section 4.2): (name, width in bytes).
+#: Kept as data so `TestFieldTables` can assert the declared total equals the
+#: sum. An earlier draft declared 20 bytes while the table totalled 22, which
+#: would have overrun a 20-byte buffer when writing `last_frame_id`.
+FEEDBACK_FIELDS: Final[tuple[tuple[str, int], ...]] = (
+    ("credits", 4),
+    ("frames_decoded", 4),
+    ("frames_dropped", 4),
+    ("decode_ms_avg", 2),
+    ("queue_depth", 2),
+    ("last_frame_status", 1),
+    ("flags", 1),
+    ("last_frame_id", 4),
+)
+
+#: Field layout of the 14-byte TOUCH payload (spec 05 section 1).
+TOUCH_FIELDS: Final[tuple[tuple[str, int], ...]] = (
+    ("action", 1),
+    ("pointer_id", 1),
+    ("x", 2),
+    ("y", 2),
+    ("pressure", 1),
+    ("flags", 1),
+    ("reserved", 2),
+    ("device_ts_ms", 4),
+)
+
+#: Field layout of the 20-byte video sub-header (spec 04 section 2).
+VIDEO_SUBHEADER_FIELDS: Final[tuple[tuple[str, int], ...]] = (
+    ("frame_id", 4),
+    ("chunk_index", 2),
+    ("chunk_total", 2),
+    ("codec", 1),
+    ("vflags", 1),
+    ("width", 2),
+    ("height", 2),
+    ("quality", 1),
+    ("reserved", 1),
+    ("frame_bytes", 4),
+)
 
 #: Recommended safe-area insets, in permille of the shorter edge (spec 06 section 2).
 #: The round hard geometric limit is (1 - 1/sqrt(2))/2 = 146.447 permille; the

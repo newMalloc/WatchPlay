@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WatchPlay demo</string>
+    <string name="start_mirroring">Start mirroring</string>
+    <string name="stop_mirroring">Stop mirroring</string>
+    <string name="stats_placeholder">Pipeline stats appear here once mirroring starts.</string>
+</resources>

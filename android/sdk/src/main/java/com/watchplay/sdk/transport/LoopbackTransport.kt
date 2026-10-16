@@ -2,6 +2,7 @@ package com.watchplay.sdk.transport
 
 import com.watchplay.sdk.protocol.Frame
 import com.watchplay.sdk.protocol.FrameCodec
+import com.watchplay.sdk.protocol.FrameType
 import com.watchplay.sdk.protocol.ProtocolLimits
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -130,19 +131,24 @@ class LoopbackTransport(
             return SendResult.TooLarge(frame.payload.size, ProtocolLimits.MAX_PAYLOAD_BYTES)
         }
 
-        // Decrement first: a credit-based link consumes the permission on hand-off, not on arrival.
-        val previous = credit.getAndUpdate { current -> if (current > 0) current - 1 else 0 }
-        if (previous <= 0) {
-            droppedForCredit.incrementAndGet()
-            if (currentState == TransportState.READY) transitionTo(TransportState.CONGESTED)
-            return SendResult.NoCredit(needed = 1, available = 0)
+        // Credit gates `VIDEO` only: at zero credit a sender MUST stop video but MAY keep sending
+        // PING/PONG/CONTROL/BYE (`01-transport.md` §6.3).
+        val isVideo = frame.typeCode == FrameType.VIDEO.code
+        if (isVideo) {
+            // Decrement first: a credit-based link consumes the permission on hand-off, not on arrival.
+            val previous = credit.getAndUpdate { current -> if (current > 0) current - 1 else 0 }
+            if (previous <= 0) {
+                droppedForCredit.incrementAndGet()
+                if (currentState == TransportState.READY) transitionTo(TransportState.CONGESTED)
+                return SendResult.NoCredit(needed = 1, available = 0)
+            }
+            if (previous - 1 == 0 && currentState == TransportState.READY) {
+                transitionTo(TransportState.CONGESTED)
+            }
         }
 
         framesSent.incrementAndGet()
         bytesSent.addAndGet(encodedSize.toLong())
-        if (previous - 1 == 0 && currentState == TransportState.READY) {
-            transitionTo(TransportState.CONGESTED)
-        }
 
         val destination = peer
         if (destination == null) {

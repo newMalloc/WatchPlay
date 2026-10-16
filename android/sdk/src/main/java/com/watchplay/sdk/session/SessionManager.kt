@@ -21,7 +21,7 @@ import com.watchplay.sdk.protocol.ProtocolException
 import com.watchplay.sdk.protocol.ProtocolLimits
 import com.watchplay.sdk.protocol.ProtocolVersion
 import com.watchplay.sdk.protocol.ResultStatus
-import com.watchplay.sdk.protocol.TouchEvent
+import com.watchplay.sdk.touch.TouchEvent
 import com.watchplay.sdk.render.WatchLayoutSpec
 import com.watchplay.sdk.transport.SendResult
 import com.watchplay.sdk.transport.TransportListener

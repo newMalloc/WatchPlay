@@ -32,8 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * ## Caveats, stated plainly
  *
  *  * **This implementation has not been run on a device.** It is written against the API 26
- *    `PixelCopy.request(View|Window, Rect, Bitmap, listener, handler)` contract and cannot be covered
- *    by JVM unit tests, so the first device run is the real test.
+ *    `PixelCopy.request(Window|Surface|SurfaceView, Rect, Bitmap, listener, handler)` contract and cannot
+ *    be covered by JVM unit tests, so the first device run is the real test.
  *  * `PixelCopy` copies what the window composited. A `WebView` renders through a child surface in the
  *    renderer process, and on some devices/versions that content comes back **black**. If the mirrored
  *    image is black while the local view looks fine, that is the cause — not the encoder.
@@ -56,10 +56,13 @@ class PixelCopyCapture(
     /** What to capture pixels from. */
     sealed interface Source {
         /**
-         * Copy the whole visible area of a view. Coordinates are handled by the `View` overload of
-         * `PixelCopy`, which resolves the view's window and scroll offsets itself.
+         * Copy the area a view occupies inside its window.
+         *
+         * The window has to be supplied because `PixelCopy` has no `View` overload: the platform only
+         * accepts a `SurfaceView`, a `Surface` or a `Window`. An `Activity` simply passes its own
+         * `window`, and this class converts the view's location into window coordinates.
          */
-        class FromView(val view: View) : Source
+        class FromView(val view: View, val window: Window) : Source
 
         /**
          * Copy an explicit rectangle of a window, in window coordinates.
@@ -132,13 +135,21 @@ class PixelCopyCapture(
                         lastError = "source view is not laid out yet (${view.width}x${view.height})"
                         return null
                     }
-                    PixelCopy.request(
-                        view,
-                        Rect(0, 0, view.width, view.height),
-                        target,
-                        listener,
-                        handler,
+                    // PixelCopy's window variant wants window coordinates, which is exactly what
+                    // getLocationInWindow reports.
+                    val location = IntArray(2)
+                    view.getLocationInWindow(location)
+                    val rect = Rect(
+                        location[0],
+                        location[1],
+                        location[0] + view.width,
+                        location[1] + view.height,
                     )
+                    if (rect.isEmpty) {
+                        lastError = "source view resolves to an empty rect $rect"
+                        return null
+                    }
+                    PixelCopy.request(current.window, rect, target, listener, handler)
                 }
 
                 is Source.FromWindow -> {

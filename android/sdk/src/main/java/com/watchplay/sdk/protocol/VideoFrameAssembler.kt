@@ -177,6 +177,12 @@ class VideoFrameAssembler(
     private var frameSeq = 0
     private var frameStartedAtMs = 0L
 
+    /**
+     * Capture timestamp seen on chunk 0, if any. It belongs to the frame, so it must survive until the
+     * last chunk arrives — the later chunks do not carry it (`04-video.md` §2.3).
+     */
+    private var captureTsMs: Long? = null
+
     private var framesCompleted = 0L
     private var framesRejected = 0L
     private var chunksAccepted = 0L
@@ -338,7 +344,6 @@ class VideoFrameAssembler(
         val active = firstChunk ?: return reject(DropReason.OUT_OF_ORDER, "no frame in flight")
 
         var offset = VideoFrameHeader.SIZE_BYTES
-        var captureTs: Long? = null
         if (header.chunkIndex == 0 && header.hasTimestamp) {
             if (frame.payload.size < offset + VideoFrameHeader.CAPTURE_TS_BYTES) {
                 return rejectInFlight(DropReason.MALFORMED_SUBHEADER, "chunk 0 is too short for its timestamp")
@@ -348,7 +353,7 @@ class VideoFrameAssembler(
                 timestamp = timestamp or
                     ((frame.payload[offset + byteIndex].toLong() and 0xFFL) shl (8 * byteIndex))
             }
-            captureTs = timestamp
+            captureTsMs = timestamp
             offset += VideoFrameHeader.CAPTURE_TS_BYTES
         }
 
@@ -386,7 +391,7 @@ class VideoFrameAssembler(
             header = active,
             codedData = buffer.copyOf(bufferSize),
             seq = frameSeq,
-            captureTsMs = captureTs,
+            captureTsMs = captureTsMs,
         )
         framesCompleted++
         bytesAssembled += bufferSize
@@ -418,6 +423,7 @@ class VideoFrameAssembler(
         bufferSize = 0
         frameSeq = 0
         frameStartedAtMs = 0L
+        captureTsMs = null
     }
 
     companion object {

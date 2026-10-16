@@ -101,8 +101,10 @@ class VideoFrameChunker(
         for (index in 0 until chunkTotal) {
             val capacity = if (index == 0) mediaBytesPerChunk - tsBytes else mediaBytesPerChunk
             val take = minOf(capacity, mediaEnd - mediaCursor)
-            val chunkData = ByteArray(tsBytes + take)
-            if (tsBytes > 0) {
+            // `04-video.md` §2.3: the capture timestamp lives in chunk 0 only, never in later chunks.
+            val prefix = if (index == 0) tsBytes else 0
+            val chunkData = ByteArray(prefix + take)
+            if (prefix > 0) {
                 // 48-bit little-endian timestamp in the low 6 bytes.
                 val timestamp = captureTsMs ?: 0L
                 for (byteIndex in 0 until VideoFrameHeader.CAPTURE_TS_BYTES) {
@@ -112,7 +114,7 @@ class VideoFrameChunker(
             if (take > 0) {
                 codedData.copyInto(
                     chunkData,
-                    destinationOffset = tsBytes,
+                    destinationOffset = prefix,
                     startIndex = mediaCursor,
                     endIndex = mediaCursor + take,
                 )

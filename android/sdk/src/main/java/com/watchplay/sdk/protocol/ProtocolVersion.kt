@@ -98,8 +98,20 @@ object ProtocolLimits {
     /** `TOUCH` is a fixed 14-byte payload (`05-input.md` §1). */
     const val TOUCH_PAYLOAD_SIZE: Int = 14
 
-    /** `FEEDBACK` is a fixed 20-byte payload (`04-video.md` §4.2). */
+    /**
+     * `FEEDBACK` payload size as **declared** by `02-wire-format.md` §6 and `01-transport.md` §6.
+     *
+     * Careful: the field table in `04-video.md` §4.2 sums to [FEEDBACK_FIELD_TABLE_SIZE] = 22 bytes, so
+     * the specification contradicts itself. See [Feedback] for how this SDK resolves it.
+     */
     const val FEEDBACK_PAYLOAD_SIZE: Int = 20
+
+    /**
+     * Size the `FEEDBACK` field table of `04-video.md` §4.2 actually adds up to
+     * (`credits` 4 + `frames_decoded` 4 + `frames_dropped` 4 + `decode_ms_avg` 2 + `queue_depth` 2 +
+     * `last_frame_status` 1 + `flags` 1 + `last_frame_id` 4).
+     */
+    const val FEEDBACK_FIELD_TABLE_SIZE: Int = 22
 
     /** `PING` / `PONG` payload size (`03-session.md` §6.1). */
     const val PING_PAYLOAD_SIZE: Int = 8

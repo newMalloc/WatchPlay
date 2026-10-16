@@ -22,7 +22,7 @@
 
 ### 起草期间已修正的错误（保留记录，避免重犯）
 
-协议在起草过程中发现并修正了五处会导致实现互不兼容的错误。记录在此是因为这些错误很容易在实现时被"重新发明"：
+协议在起草过程中发现并修正了六处会导致实现互不兼容的错误。记录在此是因为这些错误很容易在实现时被"重新发明"：
 
 | # | 错误 | 后果 | 修正 |
 | :--- | :--- | :--- | :--- |
@@ -31,6 +31,7 @@
 | 3 | `00-overview.md` 在别处仍写 "CRC32"，且把"传输缓冲 < 2 MB"含混描述 | 两处描述互相矛盾，实现者会二选一从而选错 | 以 [02-wire-format.md](02-wire-format.md) 为唯一权威；缓冲区改称"帧头层承载缓冲 520 字节"与"视频层整帧重组缓冲"两个独立概念 |
 | 4 | `max_chunk_bytes` 一度被写成 `MTU − 3`（即 ATT 可用负载），与"协议帧需一次装进一次提交"的目标不符 | 两者混用会让每个协议帧超出承载单元从而被分片，或在 MTU 23 时算出 7 却仍硬撑到 84 | 明确 `max_chunk_bytes = MTU − 16`（刻意留 13 字节余量）。分片本身合法但有代价；**MTU < 100 时协商必须失败**（`BANDWIDTH_INSUFFICIENT`）而非静默降级。见 [03-session.md §4.2](03-session.md)、[01-transport.md §5](01-transport.md) |
 | 5 | [01-transport.md](01-transport.md) 起草时以初始 Credit = 32 为默认，与 [03-session.md §4](03-session.md) 的 `initial_credits = 64` 冲突 | 两处给出不同窗口，手表与手机会对不上 | 统一为 **64**，并以 `CAPS_ACK.RESULT.initial_credits` 为唯一权威来源；`FEEDBACK.credits` 明确为**绝对值**而非增量 |
+| 6 | `FEEDBACK` 被标为 **20 字节**，但其字段表本身是 22 字节（偏移 18 处还有一个 u32 `last_frame_id`） | 20 字节的缓冲会在写入 `last_frame_id` 时越界；对端按 20 解析会读到截断的字段 | 以**字段表为准**定为 **22 字节**。接收方 **应当** 兼容 20 字节（视 `last_frame_id` 为 `0xFFFFFFFF`），发送方 **必须** 发 22 字节。见 [04-video.md §4.2](04-video.md) |
 
 **给实现者的提醒**：以上第 1 条是本协议最容易犯的 off-by-20 错误。`tools/analyze_stream.py` 内置了自动诊断——它会从抓到的字节流反推 `chunk_total` 是否自相矛盾，并直接指出犯的是哪个公式。
 
@@ -61,7 +62,7 @@
 - 分块公式：`chunk_total = ceil(frame_bytes / (max_chunk_bytes - 20))`
   - `max_chunk_bytes` 默认 **244**，即每块 224 字节媒体数据
 - **Credit 流控**：1 Credit = 1 分块，默认初始 64
-- `FEEDBACK`（20 字节）归还 Credit 并上报解码统计
+- `FEEDBACK`（**22 字节**：4+4+4+2+2+1+1+4）归还 Credit 并上报解码统计
 - MJPEG 丢块 → 丢整帧；H.264 丢帧 → 2 帧内产生 IDR，SPS/PPS 内联于 IDR
 - H.264 要求：Baseline、无 B 帧、VBR、GOP `clamp(round(fps × 0.8), 8, 12)`、剥离起始码
 - 码率自适应启发式与硬约束（质量 40–85，帧率 1–30）
