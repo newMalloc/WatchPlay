@@ -1,0 +1,15 @@
+flowchart LR
+    subgraph core0["Core 0 — BLE 协议栈"]
+        direction TB
+        ble["BLE 协议栈<br/>BT controller + Bluedroid"] --> gatt["GATT 回调<br/>notify / write"] --> parse["WatchPlay 帧解析<br/>+ 视频分块重组"]
+        parse --> feedback["FEEDBACK 生成<br/>+ Credit 归还"]
+        feedback --> touch["TOUCH 采集<br/>→ 编码 → 发送"]
+    end
+
+    subgraph core1["Core 1 — 解码与刷屏"]
+        direction TB
+        queue["跨核队列（深度 2）"] --> decode["解码任务<br/>JPEG 硬解"] --> backbuf["PSRAM 后缓冲写入"] --> te["TE 同步"] --> qspi["QSPI DMA 刷屏"] --> panel["466×466 AMOLED 面板"]
+    end
+
+    parse -->|"视频分块"| queue
+    decode -. "解码完成信号" .-> feedback

@@ -19,39 +19,9 @@
 
 ## 架构
 
-```mermaid
-flowchart LR
-    subgraph phone["手机端 (Android)"]
-        direction TB
-        ui["HTML + CSS 手表 UI"]
-        gl["OpenGL 绘制到纹理"]
-        codec["MediaCodec 编码<br/>JPEG / H.264"]
-        framing["协议封装 / Credit 流控"]
-        tx["TransportModule"]
-        touchmap["触控映射"]
-        inject["注入 WebView"]
+![WatchPlay 架构](docs/diagrams/architecture.svg)
 
-        ui -->|WebView 捕获| gl --> codec --> framing --> tx
-        tx -. 触控回传 .-> touchmap --> inject
-        inject -.-> ui
-    end
-
-    subgraph watch["手表端 (ESP32-S3 等)"]
-        direction TB
-        bearer["传输层"]
-        reassemble["协议解包 / 重组"]
-        decode["解码<br/>JPEG 硬解 / H.264"]
-        psram["PSRAM 双缓冲<br/>TE 同步"]
-        panel["466×466 圆屏"]
-        touch["触控采集 (FT3168)"]
-
-        bearer --> reassemble --> decode --> psram --> panel
-        panel -.- touch
-        touch -. 上行触控 .-> bearer
-    end
-
-    tx <-->|BLE · GATT / CoC| bearer
-```
+图源是 [docs/diagrams/architecture.mmd](docs/diagrams/architecture.mmd)。这里用图片而不是内联 Mermaid：GitHub 的 Mermaid 渲染器会忽略 subgraph 的 `direction`，带跨栏连线的图会被摊平成几千像素宽的横带，缩到正文宽度后文字不可读。
 
 音频：ESP32-S3 无经典蓝牙，不支持 A2DP，音频由手机本地播放。带经典蓝牙的芯片（如炬芯 ATS3089）可走 A2DP 独立链路。
 
@@ -78,6 +48,7 @@ docs/
     06-rendering.md          圆屏/方屏安全区与 CSS 契约
     07-capabilities.md       能力位、TLV 注册表、版本兼容
     99-changelog.md          协议变更记录
+  diagrams/                文档插图（Mermaid 源 + 渲染好的 SVG）
   guides/                  使用指南
 android/
   sdk/                     手机端 Kotlin SDK（com.watchplay.sdk）

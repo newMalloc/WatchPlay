@@ -308,17 +308,9 @@ Android 侧两种可选实现：
 
 ### 8.1 双核分工的数据流
 
-```
-Core 0:  BLE notify 回调 ──► 协议解析 ──► 重组缓冲 ──► [跨核队列] ─┐
-                       └──► 发 FEEDBACK                            │
-                                                                    ▼
-Core 1:                                          [解码] ──► [PSRAM 后缓冲]
-                                                                    │
-                                                   [TE 同步] ◄──────┘
-                                                        │
-                                                        ▼
-                                                   [QSPI 刷屏] ──► 面板
-```
+![双核分工的数据流](../diagrams/core-pipeline.svg)
+
+图源是 [core-pipeline.mmd](../diagrams/core-pipeline.mmd)。
 
 跨核队列 **必须（MUST）** 是固定大小的环形队列（推荐深度 2），并 **应当（SHOULD）** 用 FreeRTOS 的 `xQueueSendFromISR` / `xQueueReceive`，**禁止（MUST NOT）** 用信号量 + 全局缓冲（容易漏帧且难调试）。
 

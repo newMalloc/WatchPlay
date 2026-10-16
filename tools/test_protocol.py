@@ -509,6 +509,7 @@ class TestToolsAreStdlibOnly(unittest.TestCase):
         "__future__",
         "argparse",
         "ast",
+        "base64",
         "collections",
         "check_doc_links",
         "dataclasses",
@@ -521,9 +522,11 @@ class TestToolsAreStdlibOnly(unittest.TestCase):
         "struct",
         "subprocess",
         "sys",
+        "time",
         "typing",
         "unicodedata",
         "unittest",
+        "urllib",
         "watchplay_proto",
     }
 

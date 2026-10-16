@@ -1,0 +1,11 @@
+stateDiagram-v2
+    direction TB
+    [*] --> IDLE
+    IDLE --> CONNECTING: open()
+    CONNECTING --> HANDSHAKING: HELLO
+    HANDSHAKING --> NEGOTIATING: HELLO_ACK
+    NEGOTIATING --> STREAMING: CAPS_ACK
+    STREAMING --> DRAINING: PAUSE / 背压
+    DRAINING --> STREAMING: RESUME
+    CONNECTING --> FAILED: 超时 / 失败
+    FAILED --> IDLE: 重连或用户干预

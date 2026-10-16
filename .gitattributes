@@ -23,6 +23,11 @@ examples/protocol-traces/*.bin -text -diff
 *.yml text eol=lf
 *.toml text eol=lf
 
+# Document figures: the .mmd sources and the SVGs rendered from them. Keep both
+# as LF so a Windows checkout does not rewrite the committed SVG.
+*.mmd text eol=lf
+*.svg text eol=lf
+
 # Windows-only launcher scripts keep CRLF.
 *.bat text eol=crlf
 gradlew text eol=lf

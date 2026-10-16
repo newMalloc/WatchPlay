@@ -1,0 +1,13 @@
+flowchart LR
+    subgraph core0["Core 0 — BLE 与协议"]
+        direction TB
+        notify["BLE notify 回调"] --> parse["协议解析"] --> reassemble["重组缓冲"] --> queue["跨核队列"]
+        parse --> feedback["发 FEEDBACK"]
+    end
+
+    subgraph core1["Core 1 — 解码与刷屏"]
+        direction TB
+        decode["解码"] --> backbuf["PSRAM 后缓冲"] --> te["TE 同步"] --> qspi["QSPI 刷屏"] --> panel["面板"]
+    end
+
+    queue -->|"视频分块"| decode
