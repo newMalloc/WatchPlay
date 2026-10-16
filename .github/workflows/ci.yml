@@ -49,10 +49,10 @@ jobs:
   android:
     name: Android SDK build
     runs-on: ubuntu-latest
-    # Non-blocking: this module compiles and its 65 JVM unit tests pass locally
-    # (Gradle 9.3.1 / AGP 9.1 / JDK 17), but the matrix has not been observed
-    # green on a clean runner yet. Flip to blocking once it is.
-    continue-on-error: true
+    # Required as of CI run #3, where this went green on a clean runner
+    # (Gradle 9.3.1 / AGP 9.1 / JDK 17, 65 JVM unit tests). It was
+    # non-blocking while unverified; do not re-add continue-on-error to make a
+    # failure disappear -- fix the failure.
     env:
       # GitHub's ubuntu runners ship the Android SDK preinstalled here. We rely
       # on that instead of android-actions/setup-android@v3, which currently
