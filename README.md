@@ -91,8 +91,10 @@ examples/
 ```pwsh
 git clone <this-repo>
 cd WatchPlay
-python tools/test_protocol.py        # 30 项协议一致性测试
+python tools/test_protocol.py        # 46 项协议一致性测试
 python tools/gen_traces.py --check   # 校验提交的 trace 与规范一致
+python tools/lint_scenes.py          # 校验示例场景符合渲染规范
+python tools/check_doc_links.py      # 校验文档交叉引用与锚点
 ```
 
 手表端与手机端的构建方式见 [快速开始指南](docs/guides/getting-started.md)。
@@ -121,14 +123,15 @@ python tools/gen_traces.py --check   # 校验提交的 trace 与规范一致
 
 | 端 | 硬件 |
 | :--- | :--- |
-| 手表 | [LilyGO T-Display S3 AMOLED 1.43](https://www.lilygo.cc/) — ESP32-S3R8, 8 MB PSRAM, 466×466 圆屏, FT3168 触摸 |
+| 手表 | LilyGO T-Display S3 AMOLED 1.43 — ESP32-S3R8, 8 MB PSRAM, 466×466 圆屏, FT3168 触摸 |
 | 手机 | 任意 Android 8.0+（`minSdk 26`） |
 
 ## 参与
 
-- 讨论：GitHub Discussions
-- 聊天：Discord
+- **问题与 bug**：用 [Issues](https://github.com/newMalloc/WatchPlay/issues)。这是目前唯一的正式渠道。
 - 协议提案 **必须** 先在 [07-capabilities.md](docs/spec/07-capabilities.md) 登记编号，再提交 PR。见 [贡献指南](CONTRIBUTING.md)。
+
+> GitHub Discussions 与 Discord 频道尚未开设。在它们开通之前，请统一走 Issues——不开着入口却写在这里，只会让人提了没人看。
 
 初期由核心维护者决策，成熟后转向社区治理。
 
