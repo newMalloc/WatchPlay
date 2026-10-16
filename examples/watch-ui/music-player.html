@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<!--
+  WatchPlay example scene: music player on a 466x466 round AMOLED.
+
+  A conformance example for docs/spec/06-rendering.md. Deliberately a single
+  self-contained document with no external resources: the phone captures it via
+  OpenGL at ~10 fps, so a font fetch or network request landing mid-frame shows
+  up as a visible stutter on the watch.
+
+  ## Why vmin everywhere
+
+  1vmin == 1% of the shorter screen edge. On a round panel the usable area is a
+  SQUARE, so both axes must be inset by the same ABSOLUTE amount. Percentage
+  padding resolves against each axis separately, which is correct on a square
+  panel by accident and wrong on a rectangular one. The phone injects
+  --wp-safe-inset as `(safe_inset_permille / 10)vmin`; scenes must not guess it.
+
+  ## Touch targets
+
+  docs/spec/06-rendering.md requires >= 7 mm (>= 19.3vmin at 466 px, taking
+  0.0779 mm/px for the 1.43" panel) and recommends >= 9 mm (24.8vmin) for the
+  primary action. The sizes below are chosen to satisfy that, and the vertical
+  budget is checked in the comment above .safe.
+
+  ## Layout budget (verified, 466 px panel, 14vmin round inset)
+
+    safe area height = 466 - 2*(0.14*466)        = 335.5 px
+      cover            26.0vmin                  = 121.2
+      title        5.2vmin * 1.15 line-height    =  27.9
+      artist       4.4vmin * 1.1 + 1vmin margin  =  27.2
+      gap          3.0vmin * 2                   =  28.0
+      primary btn      24.8vmin                  = 115.6
+      total                                      = 319.8   -> 15.8 px slack
+
+  Earlier drafts had a third control row plus a separate elapsed-time row; that
+  overflowed the safe height by ~65 px. The progress ring carries the elapsed
+  time instead of a text row, which is why there is no clock in this scene.
+
+  Everything tappable is >= 19.3vmin, and three-in-a-row would need >= 68.83% of
+  the short edge per the spec's row-of-three rule -- which does not fit beside
+  14vmin insets -- so the transport controls are one 24.8vmin primary plus two
+  19.3vmin secondaries.
+-->
+<html lang="zh-CN" data-screen-shape="round">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>WatchPlay · Music</title>
+<style>
+  /* The phone overwrites --wp-safe-inset at document-start with the negotiated
+     DISPLAY.safe_inset_permille / 10, in vmin. The literal here is only a
+     fallback for opening this file directly in a browser. */
+  :root {
+    --wp-safe-inset: 14vmin;   /* round: 140 permille */
+    --bg: #0b0d12;
+    --fg: #f2f4f8;
+    --fg-dim: #8b93a7;
+    --accent: #4ade80;
+    --track: #232733;
+  }
+
+  /* Square panels: 40 permille. The corners are real estate. */
+  html[data-screen-shape="square"] {
+    --wp-safe-inset: 4vmin;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;              /* no scrollbars, ever */
+    background: var(--bg);         /* MUST be explicit: JPEG has no alpha */
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans CJK SC", sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;            /* the phone synthesises all gestures */
+    overscroll-behavior: none;
+  }
+
+  /* Everything the user must read or tap lives inside the safe area. */
+  .safe {
+    position: absolute;
+    inset: 0;
+    padding: var(--wp-safe-inset);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3vmin;
+  }
+
+  /* ---------------------------------------------------------------- *
+     Cover art. Capped well inside the safe area: on a round screen a
+     larger square would run into the rim even though it is technically
+     inside the inscribed square.
+     ---------------------------------------------------------------- */
+  .cover {
+    width: 26vmin;
+    height: 26vmin;
+    flex: 0 0 auto;
+    border-radius: 20%;
+    background: linear-gradient(145deg, #2d3548, #161a24);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11vmin;
+    line-height: 1;
+    /* No blur/backdrop-filter: expensive on the capture path. */
+    box-shadow: 0 0 4vmin rgba(0, 0, 0, 0.55);
+  }
+
+  .meta {
+    flex: 0 0 auto;
+    text-align: center;
+    width: 100%;
+  }
+
+  /* Minimum legible size is 4.3vmin per the spec; 5.2vmin keeps the title
+     comfortably above it and to two lines at most. */
+  .title {
+    font-size: 5.2vmin;
+    font-weight: 600;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .artist {
+    margin-top: 1vmin;
+    font-size: 4.4vmin;
+    line-height: 1.1;
+    color: var(--fg-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ---------------------------------------------------------------- *
+     Arc progress ring. Drawn with conic-gradient, which the GPU handles
+     cheaply, instead of an SVG path that would need relayout per update.
+     ---------------------------------------------------------------- */
+  .arc {
+    position: absolute;
+    inset: 5%;
+    border-radius: 50%;
+    pointer-events: none;
+    background:
+      conic-gradient(from 180deg,
+        var(--accent) calc(var(--progress, 0) * 1turn),
+        var(--track) 0);
+    /* Punch out the centre to leave a ring. */
+    -webkit-mask: radial-gradient(closest-side, transparent 89%, #000 90%);
+    mask: radial-gradient(closest-side, transparent 89%, #000 90%);
+    opacity: 0.9;
+  }
+
+  /* A square panel has no rim to trace, so the arc would look arbitrary. */
+  html[data-screen-shape="square"] .arc {
+    display: none;
+  }
+
+  /* ---------------------------------------------------------------- *
+     Transport controls.
+
+     Touch-target arithmetic at 466 px (0.0779 mm/px):
+       19.3vmin =  89.9 px = 7.01 mm   <- spec minimum
+       24.8vmin = 115.6 px = 9.00 mm   <- spec recommended for primary
+     ---------------------------------------------------------------- */
+  .controls {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6vmin;
+  }
+
+  .btn {
+    width: 19.3vmin;
+    height: 19.3vmin;
+    border-radius: 50%;
+    border: none;
+    background: var(--track);
+    color: var(--fg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7.5vmin;
+    transition: transform 100ms ease-out, background-color 100ms ease-out;
+  }
+
+  .btn.primary {
+    width: 24.8vmin;
+    height: 24.8vmin;
+    font-size: 10.5vmin;
+    background: var(--accent);
+    color: #07120c;
+  }
+
+  /* :active fires because the phone injects real MotionEvents, not
+     synthetic JS events. */
+  .btn:active {
+    transform: scale(0.92);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="arc" id="arc" style="--progress:0"></div>
+
+  <div class="safe">
+    <div class="cover" id="cover">♪</div>
+
+    <div class="meta">
+      <div class="title" id="title">Midnight Drive</div>
+      <div class="artist" id="artist">The Reference Implementation</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="prev" aria-label="上一首">⏮</button>
+      <button class="btn primary" id="play" aria-label="播放/暂停">⏸</button>
+      <button class="btn" id="next" aria-label="下一首">⏭</button>
+    </div>
+  </div>
+
+<script>
+/*
+  Keep the JS trivial. The phone captures at ~10 fps under Profile A, so any
+  animation faster than ~16 fps is invisible on the watch but still costs CPU
+  on the phone and shows up as dropped frames. Update state; do not animate.
+
+  In a real WatchPlay app the scene state is pushed from the Android side
+  (MediaSession callbacks) rather than living in the page. This demo keeps it
+  self-contained so the file also works standalone in a browser.
+*/
+(function () {
+  'use strict';
+
+  var state = { playing: true, progress: 0.32, posSec: 72, durSec: 225 };
+
+  var el = {
+    arc: document.getElementById('arc'),
+    play: document.getElementById('play'),
+    prev: document.getElementById('prev'),
+    next: document.getElementById('next'),
+    title: document.getElementById('title')
+  };
+
+  function render() {
+    el.arc.style.setProperty('--progress', state.progress.toFixed(4));
+    el.play.textContent = state.playing ? '⏸' : '▶';
+    document.title = 'WatchPlay · ' + Math.round(state.progress * 100) + '%';
+  }
+
+  el.play.addEventListener('click', function () {
+    state.playing = !state.playing;
+    render();
+    // A real scene would post to the Android host here, e.g.
+    //   WatchPlayHost.postMessage(JSON.stringify({action:'toggle'}))
+  });
+
+  function reset() { state.posSec = 0; state.progress = 0; render(); }
+  el.prev.addEventListener('click', reset);
+  el.next.addEventListener('click', reset);
+
+  // Advance the progress ring on a 1 s cadence -- deliberately far below the
+  // capture frame rate so it never competes with rendering.
+  setInterval(function () {
+    if (!state.playing) return;
+    state.posSec += 1;
+    state.progress = Math.min(1, state.posSec / state.durSec);
+    render();
+  }, 1000);
+
+  render();
+})();
+</script>
+</body>
+</html>

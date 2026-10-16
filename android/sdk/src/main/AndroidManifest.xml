@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WatchPlay :sdk — library manifest.
+
+  This module declares no components. It only declares the Bluetooth permissions that the BLE
+  transports need, so that a consumer app inherits them without having to remember them.
+
+  Permission model (Android 12 / API 31+ changed BLE permissions):
+    * API <= 30 : BLUETOOTH + BLUETOOTH_ADMIN, granted at install time. Hence maxSdkVersion="30".
+    * API >= 31 : BLUETOOTH_SCAN + BLUETOOTH_CONNECT, requested at runtime. BLUETOOTH_SCAN carries
+                  usesPermissionFlags="neverForLocation" because WatchPlay never derives physical
+                  location from scan results (it only looks for the paired watch), which keeps the
+                  permission out of the "location" permission group.
+  BLUETOOTH_ADVERTISE is deliberately NOT declared: the phone is always the central/initiator.
+  Neither is any screen-capture permission — WatchPlay never uses MediaProjection.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Legacy Bluetooth permissions, only meaningful up to Android 11. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Runtime-requested Bluetooth permissions on Android 12+. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- BLE is optional: LoopbackTransport lets the SDK run with no radio at all. -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+
+    <!-- TODO(next contributor): the demo app, not the SDK, must perform the runtime permission
+         request (ActivityResultContracts.RequestMultiplePermissions) before calling
+         WatchPlayClient.connect(); the SDK deliberately does not own an Activity. -->
+
+</manifest>

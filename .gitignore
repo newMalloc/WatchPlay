@@ -1,0 +1,87 @@
+# ---- Python (tools/) ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+venv/
+.venv/
+env/
+ENV/
+
+# ---- Android ----
+# Note: Gradle wrapper JARs ARE committed on purpose (reproducible builds
+# without a local Gradle install). Do not un-ignore anything under
+# android/gradle/wrapper/*.jar.
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+local.properties
+android/local.properties
+*.hprof
+
+# ---- ESP-IDF / PlatformIO (watch/) ----
+.pio/
+.pioenvs/
+.piolibdeps/
+sdkconfig
+sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+managed_components/
+dependencies.lock
+build/
+watch/build/
+*.bin
+*.elf
+*.map
+*.lst
+
+# ---- IDE / editors ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+nbproject/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Secrets / local config ----
+secrets.properties
+*.keystore
+*.jks
+google-services.json

@@ -1,0 +1,31 @@
+# WatchPlay — Android phone side: Gradle version catalog.
+#
+# Version selection policy (see android/ for the full rationale in the module build scripts):
+#   * Pick the newest AGP / Kotlin that is ALREADY present in ~/.gradle/caches/modules-2 so the
+#     phone module can be built offline. On this machine that is AGP 9.1.0 and Kotlin 2.2.10.
+#   * Gradle itself is pinned to 9.3.1, whose distribution is already unpacked in
+#     ~/.gradle/wrapper/dists (gradle-9.3.1-bin).
+#   * androidx/androidx.appcompat are ordinary Maven dependencies (not build plugins); they are
+#     resolved from google()/mavenCentral() and are cached after the first successful build.
+
+[versions]
+# Build plugins — must stay in sync with the cached artifacts listed above.
+agp = "9.1.0"
+kotlin = "2.2.10"
+
+# Runtime dependencies.
+coreKtx = "1.13.1"
+appcompat = "1.7.0"
+
+# Test dependencies.
+junit = "4.13.2"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

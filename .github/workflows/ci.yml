@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    name: Protocol conformance (python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # tools/ is stdlib-only on purpose: it is the executable reference
+      # implementation of the spec and must run anywhere with no install step.
+      # The stdlib-only guarantee is asserted by a test, not by shell regex.
+      - name: Protocol conformance tests
+        run: python tools/test_protocol.py
+
+      - name: Committed traces match the generator
+        run: python tools/gen_traces.py --check
+
+      - name: Example scenes satisfy the rendering spec
+        run: python tools/lint_scenes.py
+
+  spec-links:
+    name: Spec cross-references resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check relative markdown links in docs/
+        run: python tools/check_doc_links.py
+
+  android:
+    name: Android SDK build
+    runs-on: ubuntu-latest
+    # Non-blocking while the SDK is an unverified skeleton. Flipping this to
+    # blocking requires the Gradle wrapper to be committed first: this repo
+    # intentionally does not vendor the wrapper JAR yet, so the step below
+    # installs Gradle instead of assuming ./gradlew exists.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Build
+        working-directory: android
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew :sdk:assembleDebug :sdk:test --no-daemon --stacktrace
+          else
+            echo "::notice::android/gradlew is not committed; using the Gradle installed by setup-gradle"
+            gradle :sdk:assembleDebug :sdk:test --no-daemon --stacktrace
+          fi
