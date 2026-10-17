@@ -1,0 +1,16 @@
+{
+  "name": "watchplay-intro-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "WatchPlay 介绍动画：一张网页，逐帧截图后编码成 mp4。",
+  "type": "module",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "snap": "node snap.mjs",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "playwright-core": "^1.63.0"
+  }
+}

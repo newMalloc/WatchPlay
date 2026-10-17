@@ -1,0 +1,6 @@
+# 脚本产物，不入库（要进仓库的成品是 mp4 / preview.gif / poster.png，在上一级目录）
+node_modules/
+frames/
+snap/
+verify/
+out/

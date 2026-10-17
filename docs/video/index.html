@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>WatchPlay 介绍动画</title>
+<link rel="icon" href="logo.png">
+<style>
+  :root{
+    --bg:#05070c;
+    --panel:#0b1119;
+    --panel2:#111a26;
+    --line:#1e2937;
+    --text:#eef3ff;
+    --dim:#8a93a8;
+    --dim2:#5f6878;
+    --accent:#4ac6ff;
+    --accent2:#1f86c9;
+    --warm:#ffb35c;
+    --ok:#6ee7a8;
+    --err:#ff6b6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  body{font-family:"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;color:var(--text)}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;background:var(--bg);overflow:hidden;
+         transform-origin:50% 50%;transform:translate(-50%,-50%);
+         -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+  .mono{font-family:"Cascadia Mono","Consolas","Microsoft YaHei UI",monospace}
+
+  /* ---------- 背景 ---------- */
+  #bg{position:absolute;inset:0;pointer-events:none}
+  #bg .grid{position:absolute;inset:0;opacity:.55;
+    background-image:linear-gradient(rgba(74,198,255,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(74,198,255,.05) 1px,transparent 1px);
+    background-size:64px 64px}
+  #bg .glow1{position:absolute;width:1500px;height:1200px;left:-320px;top:-460px;
+    background:radial-gradient(closest-side,rgba(74,198,255,.22),transparent 70%)}
+  #bg .glow2{position:absolute;width:1400px;height:1100px;right:-380px;bottom:-480px;
+    background:radial-gradient(closest-side,rgba(255,179,92,.12),transparent 70%)}
+  #bg .vig{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,transparent 42%,rgba(0,0,0,.62) 100%)}
+  .sweep{position:absolute;height:1px;width:340px;left:0;top:0;
+    background:linear-gradient(90deg,transparent,rgba(74,198,255,.85),transparent)}
+
+  /* ---------- 场景框架 ---------- */
+  .scene{position:absolute;inset:0;opacity:0}
+
+  /* ---------- 文字 ---------- */
+  .hd{font-size:56px;font-weight:700;letter-spacing:.5px;line-height:1.16}
+  .hd.sm{font-size:46px}
+  .sub{font-size:24px;color:var(--dim);margin-top:16px;line-height:1.45}
+  .eyebrow{font-size:19px;letter-spacing:4px;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .tag{display:inline-flex;align-items:center;gap:8px;font-size:19px;color:var(--dim);
+       border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:999px;padding:8px 18px}
+  .foot{font-size:20px;color:var(--dim2)}
+
+  /* ---------- 卡片 / 提示 ---------- */
+  .card{position:absolute;background:linear-gradient(180deg,rgba(17,26,38,.96),rgba(9,14,21,.96));
+        border:1px solid var(--line);border-radius:16px;padding:26px 30px;
+        box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .card .ct{font-size:27px;font-weight:600}
+  .card .cd{font-size:19px;color:var(--dim);margin-top:10px;line-height:1.5}
+  .chip{position:absolute;background:rgba(8,13,20,.94);border:1px solid rgba(255,255,255,.14);
+        border-radius:12px;padding:14px 20px 14px 18px;box-shadow:0 18px 44px rgba(0,0,0,.55)}
+  .chip::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:3px;background:var(--accent)}
+  .chip .t{font-size:22px;font-weight:600}
+  .chip .d{font-size:17px;color:var(--dim);margin-top:5px;line-height:1.35}
+
+  /* ---------- 设备 ---------- */
+  .phone{position:relative;width:330px;height:726px;border-radius:46px;background:#0a0e14;
+         border:2px solid #2a3644;box-shadow:0 40px 90px rgba(0,0,0,.7),inset 0 0 0 4px #131b26;overflow:hidden}
+  .phone img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;display:block}
+  .phone .layer{position:absolute;inset:0;opacity:0}
+  .watch{position:relative;width:620px;height:620px;border-radius:50%;
+         background:radial-gradient(circle at 50% 30%,#1b2531,#080c12 70%);
+         border:2px solid #2b3a4a;box-shadow:0 40px 100px rgba(0,0,0,.75),0 0 0 10px #0c131b,0 0 0 12px #223040}
+  .watch .screen{position:absolute;left:30px;top:30px;width:560px;height:560px;border-radius:50%;overflow:hidden;background:#05070c}
+  .watch .screen iframe{width:560px;height:560px;border:0;display:block}
+  .watch .gloss{position:absolute;inset:0;border-radius:50%;pointer-events:none;
+    background:radial-gradient(120% 80% at 30% -10%,rgba(255,255,255,.10),transparent 55%)}
+
+  /* ---------- 数据条 ---------- */
+  .stat{background:linear-gradient(180deg,rgba(23,33,46,.95),rgba(11,17,25,.95));border:1px solid #22303f;border-radius:12px;padding:14px 20px;text-align:center}
+  .stat .v{font-size:26px;font-weight:700}
+  .stat .l{font-size:16px;color:var(--dim);margin-top:6px}
+
+  /* ---------- 字节 ---------- */
+  .hbyte{width:56px;height:72px;border-radius:8px;border:1px solid #263447;background:#0d151f;
+         display:flex;align-items:center;justify-content:center;font-size:17px;color:#c9d6e6;
+         font-family:"Cascadia Mono",Consolas,monospace}
+  .hfield{height:30px;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;
+          font-size:16px;color:#d8e8f7;letter-spacing:.4px;overflow:hidden;white-space:nowrap}
+  .hidx{font-size:14px;color:var(--dim2);text-align:center;font-family:"Cascadia Mono",Consolas,monospace}
+  .subrow{display:flex;align-items:center;font-size:18px;color:#c9d6e6;height:44px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .subrow .off{width:70px;color:var(--dim2);font-family:"Cascadia Mono",Consolas,monospace;font-size:15px}
+  .subrow .nm{width:200px;font-family:"Cascadia Mono",Consolas,monospace;font-size:17px;color:#dfeaf7}
+  .subrow .ty{width:70px;color:var(--accent);font-size:15px}
+  .subrow .ds{flex:1;color:var(--dim);font-size:16px}
+  .chunk{width:27px;height:58px;border-radius:4px;background:#12202e;border:1px solid #244055}
+  .credit{width:14px;height:14px;border-radius:3px;background:#123b4d;border:1px solid #1f6f8d}
+
+  /* ---------- 图表 ---------- */
+  .bar{position:absolute;bottom:0;width:132px;border-radius:8px 8px 0 0;
+       background:linear-gradient(180deg,rgba(74,198,255,.9),rgba(31,134,201,.35))}
+  .bar.off{background:linear-gradient(180deg,rgba(120,135,155,.45),rgba(90,105,125,.15))}
+  .barlbl{position:absolute;text-align:center;font-size:19px;color:#cfe3f5}
+  .rule{display:flex;align-items:center;height:64px;border-bottom:1px solid rgba(255,255,255,.06);font-size:19px}
+  .rule .obs{width:330px;color:#dfeaf7;font-family:"Cascadia Mono",Consolas,monospace;font-size:17px}
+  .rule .act{flex:1;color:var(--warm);text-align:right;font-family:"Cascadia Mono",Consolas,monospace;font-size:17px}
+
+  /* ---------- 收尾 ---------- */
+  .codebox{font-family:"Cascadia Mono",Consolas,monospace;font-size:20px;background:#080d14;
+           border:1px solid #1b2634;border-radius:10px;padding:16px 22px;color:#cfe3f5}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg">
+    <div class="glow1"></div><div class="glow2"></div><div class="grid"></div><div id="sweeps"></div><div class="vig"></div>
+  </div>
+
+  <!-- ================= 1. 开场 ================= -->
+  <section class="scene" id="s1">
+    <div id="introRing" style="position:absolute;left:960px;top:386px;width:190px;height:190px;margin:-95px 0 0 -95px;
+         border:2px solid rgba(74,198,255,.55);border-radius:24%"></div>
+    <div id="introRing2" style="position:absolute;left:960px;top:386px;width:190px;height:190px;margin:-95px 0 0 -95px;
+         border:2px solid rgba(74,198,255,.32);border-radius:24%"></div>
+    <img id="introIcon" src="logo.png" style="position:absolute;left:960px;top:386px;width:190px;height:190px;margin:-95px 0 0 -95px">
+    <div id="introTitle" style="position:absolute;left:0;right:0;top:512px;text-align:center;font-size:104px;font-weight:700;letter-spacing:2px">WatchPlay</div>
+    <div id="introSub" style="position:absolute;left:0;right:0;top:648px;text-align:center;font-size:32px;color:#b9c2cd">手机 → 手表投屏协议</div>
+    <div id="introLine" style="position:absolute;left:50%;top:718px;height:2px;width:0;background:linear-gradient(90deg,transparent,var(--accent),transparent);transform:translateX(-50%)"></div>
+    <div id="introTags" style="position:absolute;left:0;right:0;top:764px;text-align:center"></div>
+    <div id="introFoot" style="position:absolute;left:0;right:0;top:852px;text-align:center;font-size:21px;color:#6d7681">协议规范 + Kotlin SDK + 参考 App &nbsp;|&nbsp; Apache 2.0</div>
+  </section>
+
+  <!-- ================= 2. 现状对比 ================= -->
+  <section class="scene" id="s2">
+    <div style="position:absolute;left:64px;top:52px">
+      <div class="eyebrow">现状</div>
+      <div class="hd">一块表，一套 App</div>
+      <div class="sub">屏幕形状、分辨率、SDK 各不相同，UI 只能逐块重写</div>
+    </div>
+    <div id="s2Old" style="position:absolute;left:64px;top:310px;width:800px"></div>
+    <div id="s2Arrow" style="position:absolute;left:900px;top:520px;width:120px;text-align:center;font-size:44px;color:#31465c">→</div>
+    <div id="s2New" style="position:absolute;left:1060px;top:290px;width:796px"></div>
+    <div id="s2Statement" style="position:absolute;left:0;right:0;top:664px;text-align:center;font-size:34px;color:#e6eef8;opacity:0">
+      界面的作者是 <span style="color:var(--accent)">HTML + CSS</span>，不是某块表的 SDK
+    </div>
+    <div id="s2Caption" style="position:absolute;left:0;right:0;top:748px;text-align:center;font-size:22px;color:#9aa3ae"></div>
+  </section>
+
+  <!-- ================= 3. 渲染即投屏 ================= -->
+  <section class="scene" id="s3">
+    <div style="position:absolute;left:64px;top:44px">
+      <div class="eyebrow">渲染即投屏</div>
+      <div class="hd sm">一份 HTML，投到表上</div>
+    </div>
+    <div id="s3Row" style="position:absolute;left:0;top:186px;width:1920px;display:flex;justify-content:center;gap:150px">
+      <div class="device" style="width:620px;display:flex;flex-direction:column;align-items:center">
+        <div id="s3ChipA" class="tag" style="margin-bottom:18px">手机 · WebView 渲染 HTML + CSS</div>
+        <div class="slot" style="height:730px;display:flex;align-items:center;justify-content:center">
+          <div class="phone" id="s3Phone"><img src="../guides/demo-frame-preview.png" alt=""></div>
+        </div>
+      </div>
+      <div class="device" style="width:620px;display:flex;flex-direction:column;align-items:center">
+        <div id="s3ChipB" class="tag" style="margin-bottom:18px">手表 · 只解码、只显示</div>
+        <div class="slot" style="height:730px;display:flex;align-items:center;justify-content:center">
+          <div class="watch" id="s3Watch">
+            <div class="screen"><iframe id="frameHero" src="../../examples/watch-ui/demo-scene.html?scene=face&amp;shape=round" title="手表场景"></iframe></div>
+            <div class="gloss"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="s3Link" style="position:absolute;left:874px;top:642px;width:172px;height:2px;
+         background:repeating-linear-gradient(90deg,rgba(74,198,255,.65) 0 12px,transparent 12px 22px)"></div>
+    <div id="s3Packets"></div>
+    <div id="s3Stats" style="position:absolute;left:830px;right:0;bottom:64px;display:flex;justify-content:center;gap:18px"></div>
+  </section>
+
+  <!-- ================= 4. 线格式 ================= -->
+  <section class="scene" id="s4">
+    <div style="position:absolute;left:64px;top:44px">
+      <div class="eyebrow">线格式</div>
+      <div class="hd sm">一帧 8 123 字节，怎么过 244 字节的 MTU</div>
+      <div class="sub">16 字节帧头 + 20 字节视频子头 + 至多 224 字节媒体数据</div>
+    </div>
+    <div id="s4Hdr" style="position:absolute;left:64px;top:268px"></div>
+    <div id="s4Formula" style="position:absolute;left:64px;top:470px;font-family:'Cascadia Mono',Consolas,monospace;
+         font-size:21px;color:#8fb4cc;opacity:0">chunk_total = ceil(8123 / (244 − 20)) = 37</div>
+    <div id="s4Sub" style="position:absolute;left:1050px;top:254px;width:806px">
+      <div style="font-size:19px;color:var(--accent);letter-spacing:2px;margin-bottom:8px">VIDEO 子头 · 20 字节</div>
+      <div id="s4SubRows"></div>
+    </div>
+    <div id="s4Frame" style="position:absolute;left:64px;top:600px">
+      <div style="font-size:19px;color:#9aa3ae;margin-bottom:12px">
+        <span class="mono" style="color:var(--warm)">8 123 B</span> → <span class="mono" style="color:var(--accent)">37 块</span>
+        &nbsp;·&nbsp; 块 0–35 每块 244 B，块 36 只有 79 B
+      </div>
+      <div id="s4Chunks" style="display:flex;gap:3px"></div>
+      <div style="display:flex;justify-content:space-between;width:1110px;margin-top:10px;font-size:16px;color:#7c8698">
+        <span>块 0 · 带 FIRST_CHUNK</span><span>块 36 · 79 B · 带 LAST_CHUNK</span>
+      </div>
+    </div>
+    <div id="s4Stats" style="position:absolute;left:64px;top:790px;display:flex;gap:22px"></div>
+    <div id="s4Credit" style="position:absolute;left:1330px;top:608px;width:520px">
+      <div style="font-size:19px;color:#9aa3ae;margin-bottom:10px">Credit · 1 块 = 1 Credit，初始 64</div>
+      <div id="s4CreditDots" style="display:flex;flex-wrap:wrap;gap:7px;width:300px"></div>
+    </div>
+    <div id="s4Note" style="position:absolute;left:64px;right:64px;bottom:44px;text-align:center;font-size:20px;color:#8a93a8">
+      hdr_crc 覆盖整个 16 字节帧头（偏移 14–15 置零）：只算 14 字节会得到 0x7D5D，正确值是 0xF55D
+    </div>
+  </section>
+
+  <!-- ================= 5. 码率自适应 ================= -->
+  <section class="scene" id="s5">
+    <div style="position:absolute;left:64px;top:44px">
+      <div class="eyebrow">码率自适应</div>
+      <div class="hd sm">带宽不够，就降质量</div>
+      <div class="sub">手表的 FEEDBACK 把队列深度、解码耗时、丢帧数带回来，手机据此调 JPEG 质量与帧率</div>
+    </div>
+    <div id="s5Chart" style="position:absolute;left:104px;top:352px;width:820px;height:380px">
+      <div style="position:absolute;left:0;bottom:0;width:100%;height:1px;background:#233040"></div>
+    </div>
+    <div id="s5ChartNote" style="position:absolute;left:104px;top:852px;width:820px;font-size:18px;color:#7c8698">
+      466×466 的实测 JPEG 字节数（同一画面，只改质量）
+    </div>
+    <div id="s5Panel" style="position:absolute;left:1010px;top:300px;width:846px">
+      <div class="card" style="position:relative;left:0;top:0;width:100%">
+        <div style="display:flex;align-items:baseline;gap:16px">
+          <div style="font-size:19px;color:#9aa3ae">当前 JPEG 质量</div>
+          <div id="s5Q" class="mono" style="font-size:52px;font-weight:700;color:var(--accent)">85</div>
+          <div id="s5Size" class="mono" style="font-size:22px;color:#9aa3ae">24.2 kB</div>
+        </div>
+        <div id="s5Rules" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div id="s5Caption" style="position:absolute;left:64px;right:64px;bottom:44px;text-align:center;font-size:21px;color:#9aa3ae">
+      质量必须在 [40, 85]；单帧超过 max_frame_bytes 必须降质量重编，而不是硬发
+    </div>
+  </section>
+
+  <!-- ================= 6. 触控回传 ================= -->
+  <section class="scene" id="s6">
+    <div style="position:absolute;left:64px;top:44px">
+      <div class="eyebrow">输入回传</div>
+      <div class="hd sm">在手表上点一下</div>
+      <div class="sub">手表只回传原始坐标；命中判定与手势交给手机里的 WebView</div>
+    </div>
+    <div id="s6WatchWrap" style="position:absolute;left:170px;top:250px">
+      <div class="watch">
+        <div class="screen"><iframe id="frameTouch" src="../../examples/watch-ui/demo-scene.html?scene=face&amp;shape=round" title="手表场景"></iframe></div>
+        <div class="gloss"></div>
+      </div>
+      <div id="s6TouchDot" style="position:absolute;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;
+           background:rgba(74,198,255,.22);border:2px solid rgba(74,198,255,.9);opacity:0"></div>
+    </div>
+    <div id="s6PhoneWrap" style="position:absolute;left:1130px;top:196px">
+      <div class="phone" style="width:340px;height:748px">
+        <img src="../guides/demo-frame-preview.png" alt="">
+        <img class="layer" id="s6PhoneMusic" src="../guides/demo-music.png" alt="">
+      </div>
+    </div>
+    <div id="s6Path" style="position:absolute;left:850px;top:660px;width:250px;height:2px;
+         background:repeating-linear-gradient(90deg,rgba(255,179,92,.7) 0 12px,transparent 12px 22px)"></div>
+    <div id="s6Packet" style="position:absolute;left:862px;top:616px;opacity:0">
+      <div style="background:rgba(12,18,26,.96);border:1px solid rgba(255,179,92,.55);border-radius:10px;
+           padding:12px 16px;font-family:'Cascadia Mono',Consolas,monospace;font-size:17px;line-height:1.5;color:#ffe0b8">
+        TOUCH · 14 B<br><span style="color:#ffb35c">UP</span> &nbsp;x=178 &nbsp;y=348
+      </div>
+    </div>
+    <div id="s6Chip" class="chip" style="left:150px;top:930px;width:640px;opacity:0">
+      <div class="t">原始坐标，不做任何换算</div>
+      <div class="d">x / y 是手表物理像素；缩放与安全区补偿只有手机知道（05-input §2.1）</div>
+    </div>
+    <div id="s6Caption" style="position:absolute;left:860px;right:64px;bottom:70px;text-align:center;font-size:22px;color:#9aa3ae"></div>
+  </section>
+
+  <!-- ================= 7. 仓库 ================= -->
+  <section class="scene" id="s7">
+    <div style="position:absolute;left:64px;top:44px">
+      <div class="eyebrow">仓库</div>
+      <div class="hd sm">规范不是 PPT：每个字节都能跑</div>
+      <div class="sub">docs/spec 是权威；tools/ 是可执行的断言；examples/protocol-traces 是提交进仓库的字节</div>
+    </div>
+    <div id="s7Cards" style="position:absolute;left:64px;top:296px;display:flex;gap:24px"></div>
+    <div id="s7Tree" style="position:absolute;left:560px;top:600px;width:800px;background:#080d14;
+         border:1px solid #1b2634;border-radius:12px;padding:18px 24px;font-family:'Cascadia Mono',Consolas,monospace;
+         font-size:19px;line-height:1.62;color:#c3d3e2;opacity:0"></div>
+    <div id="s7Foot" style="position:absolute;left:0;right:0;top:790px;text-align:center;font-size:22px;color:#9aa3ae"></div>
+  </section>
+
+  <!-- ================= 8. 收尾 ================= -->
+  <section class="scene" id="s8">
+    <div id="s8Lock" style="position:absolute;left:0;right:0;top:186px;text-align:center">
+      <img src="logo.png" style="width:150px;height:150px">
+      <div style="font-size:62px;font-weight:700;margin-top:14px;letter-spacing:1px">WatchPlay</div>
+      <div style="font-size:25px;color:#9aa3ae;margin-top:10px">手机 → 手表投屏协议 · 规范 + 参考实现</div>
+    </div>
+    <div id="s8Command" class="codebox" style="position:absolute;left:50%;top:556px;transform:translateX(-50%);opacity:0">python tools/test_protocol.py &nbsp;&nbsp;<span style="color:#5f6878"># 49 项一致性测试</span></div>
+    <div id="s8Tags" style="position:absolute;left:0;right:0;top:666px;text-align:center"></div>
+    <div id="s8Url" style="position:absolute;left:0;right:0;top:758px;text-align:center;font-size:30px">
+      <span class="mono" style="color:#7fc4ff">github.com/newMalloc/WatchPlay</span>
+    </div>
+    <div id="s8Tail" style="position:absolute;left:0;right:0;top:834px;text-align:center;font-size:21px;color:#6d7681">Apache 2.0 · 参考 App 与手表端 App 在同一个仓库</div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const FPS = 30;
+const W = 1920, H = 1080;
+
+/* ---------------- 时间轴 ---------------- */
+const SCENES = [
+  { id:'s1', start:0.0,  end:4.7  },
+  { id:'s2', start:4.7,  end:11.9 },
+  { id:'s3', start:11.9, end:21.4 },
+  { id:'s4', start:21.4, end:28.6 },
+  { id:'s5', start:28.6, end:35.2 },
+  { id:'s6', start:35.2, end:42.2 },
+  { id:'s7', start:42.2, end:48.4 },
+  { id:'s8', start:48.4, end:53.0 },
+];
+const TOTAL = SCENES[SCENES.length - 1].end;
+// 相邻两段的边界是同一点：上一段先黑掉，下一段再从黑里出来，不做交叠叠影
+const FADE_IN = 0.4, FADE_OUT = 0.4;
+
+/* ---------------- 工具 ---------------- */
+const $ = (s, r) => (r || document).querySelector(s);
+const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+const seg = (t, a, b) => b === a ? (t >= b ? 1 : 0) : clamp01((t - a) / (b - a));
+const ease = x => 1 - Math.pow(1 - x, 3);
+const eseg = (t, a, b) => ease(seg(t, a, b));
+const mix = (a, b, k) => a + (b - a) * k;
+const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+
+/* ---------------- 背景流光 ---------------- */
+const sweeps = [];
+(function buildSweeps() {
+  const host = $('#sweeps');
+  const seed = [0.04, 0.18, 0.36, 0.51, 0.67, 0.85];
+  for (let i = 0; i < 6; i++) {
+    const s = el('div', 'sweep');
+    s.dataset.y = (70 + seed[i] * 940).toFixed(0);
+    s.dataset.ph = seed[i].toFixed(3);
+    s.dataset.sp = (0.018 + (i % 3) * 0.008).toFixed(3);
+    s.dataset.op = (0.18 + (i % 4) * 0.12).toFixed(2);
+    host.appendChild(s); sweeps.push(s);
+  }
+})();
+function drawBg(t) {
+  for (const s of sweeps) {
+    const y = +s.dataset.y, ph = +s.dataset.ph, sp = +s.dataset.sp, op = +s.dataset.op;
+    const k = (ph + t * sp) % 1;
+    s.style.transform = 'translate(' + (k * 2380 - 400).toFixed(1) + 'px,' + y + 'px)';
+    s.style.opacity = (op * Math.sin(Math.PI * k)).toFixed(3);
+  }
+}
+
+/* ---------------- 场景 1：开场 ---------------- */
+const INTRO_TAGS = ['HTML + CSS 渲染', '无录屏权限', '触控回传'];
+(function () {
+  const host = $('#introTags');
+  INTRO_TAGS.forEach((txt, i) => {
+    const n = el('span', 'tag', txt);
+    n.style.margin = '0 8px'; n.style.opacity = 0;
+    host.appendChild(n);
+  });
+})();
+function renderS1(t) {
+  const iconIn = eseg(t, 0.05, 0.85);
+  const ic = $('#introIcon');
+  ic.style.opacity = iconIn;
+  ic.style.transform = 'scale(' + mix(0.74, 1, ease(iconIn)).toFixed(4) + ')';
+  const ring = (node, k) => {
+    node.style.opacity = (0.85 * (1 - k)).toFixed(3);
+    node.style.transform = 'scale(' + mix(0.7, 1.9, ease(k)).toFixed(3) + ')';
+  };
+  ring($('#introRing'), seg(t, 0.30, 1.70));
+  ring($('#introRing2'), seg(t, 0.85, 2.30));
+  const tIn = eseg(t, 0.75, 1.45);
+  const ti = $('#introTitle');
+  ti.style.opacity = tIn;
+  ti.style.transform = 'translateY(' + mix(26, 0, tIn).toFixed(1) + 'px)';
+  const sIn = eseg(t, 1.05, 1.75);
+  const su = $('#introSub');
+  su.style.opacity = sIn;
+  su.style.transform = 'translateY(' + mix(22, 0, sIn).toFixed(1) + 'px)';
+  $('#introLine').style.width = (eseg(t, 1.25, 1.95) * 560).toFixed(1) + 'px';
+  const tags = $('#introTags').children;
+  for (let i = 0; i < tags.length; i++) {
+    const k = eseg(t, 1.55 + i * 0.13, 2.15 + i * 0.13);
+    tags[i].style.opacity = k;
+    tags[i].style.transform = 'translateY(' + mix(16, 0, k).toFixed(1) + 'px)';
+  }
+  $('#introFoot').style.opacity = eseg(t, 2.0, 2.6) * 0.95;
+}
+
+/* ---------------- 场景 2：现状 ---------------- */
+const OLD = [
+  { t: 5.0, ct: '每个型号重写一遍', cd: '分辨率、屏幕形状、SDK 都不一样，同一套界面逐块适配' },
+  { t: 5.6, ct: 'MediaProjection 投整屏', cd: '整块手机屏缩到 466 px：要录屏授权，画面还被拉伸' },
+];
+const NEW_STEPS = [
+  { t: 8.9, k: '①', txt: '用 HTML + CSS 写一次界面' },
+  { t: 9.4, k: '②', txt: '手机 WebView 按 466×466 渲染、编码' },
+  { t: 9.9, k: '③', txt: '手表只解码、只刷屏、只回传触控' },
+];
+(function () {
+  const host = $('#s2Old');
+  OLD.forEach((c, i) => {
+    const n = el('div', 'card', '<div class="ct">' + c.ct + '</div><div class="cd">' + c.cd + '</div>');
+    n.style.cssText += 'position:relative;left:0;top:0;width:100%;margin-bottom:22px';
+    n.dataset.i = i;
+    host.appendChild(n);
+    c.node = n;
+  });
+  const host2 = $('#s2New');
+  const big = el('div', 'card');
+  big.style.cssText += 'position:relative;left:0;top:0;width:100%;background:linear-gradient(180deg,rgba(18,34,48,.98),rgba(8,14,21,.98));border-color:rgba(74,198,255,.42)';
+  big.innerHTML = '<div style="display:flex;align-items:center;gap:14px">' +
+    '<img src="logo.png" style="width:52px;height:52px">' +
+    '<div><div style="font-size:30px;font-weight:600">WatchPlay</div>' +
+    '<div style="font-size:18px;color:#7c8698;margin-top:4px">渲染即投屏</div></div></div><div id="s2Steps" style="margin-top:24px"></div>';
+  host2.appendChild(big);
+  const steps = big.querySelector('#s2Steps');
+  NEW_STEPS.forEach((s, i) => {
+    const row = el('div', '', '<span style="display:inline-block;width:34px;color:var(--accent);font-size:22px">' + s.k + '</span>' +
+      '<span style="font-size:21px;color:#dfeaf7">' + s.txt + '</span>');
+    row.style.cssText += 'height:52px;display:flex;align-items:center;opacity:0';
+    row.dataset.i = i;
+    steps.appendChild(row);
+    s.node = row;
+  });
+})();
+function renderS2(t) {
+  const t0 = SCENES[1].start;
+  OLD.forEach((c, i) => {
+    const k = eseg(t, c.t, c.t + 0.5);
+    c.node.style.opacity = k;
+    c.node.style.transform = 'translateX(' + mix(-40, 0, k).toFixed(1) + 'px)';
+    const dead = eseg(t, 7.9 + i * 0.15, 8.4 + i * 0.15);
+    c.node.style.filter = 'saturate(' + mix(1, 0.35, dead).toFixed(2) + ')';
+    c.node.style.borderColor = dead > 0.5 ? 'rgba(255,107,107,.35)' : 'var(--line)';
+    if (!c.node.querySelector('.xmark')) {
+      const x = el('div', 'xmark', '✕');
+      x.style.cssText = 'position:absolute;right:22px;top:22px;font-size:26px;color:#ff6b6b;opacity:0';
+      c.node.appendChild(x);
+    }
+    c.node.querySelector('.xmark').style.opacity = dead;
+  });
+  $('#s2New').style.opacity = eseg(t, 8.3, 8.9);
+  $('#s2New').style.transform = 'translateX(' + mix(40, 0, eseg(t, 8.3, 8.9)).toFixed(1) + 'px)';
+  NEW_STEPS.forEach(s => {
+    const k = eseg(t, s.t, s.t + 0.4);
+    s.node.style.opacity = k;
+    s.node.style.transform = 'translateX(' + mix(18, 0, k).toFixed(1) + 'px)';
+  });
+  $('#s2Arrow').style.opacity = eseg(t, 8.5, 9.0) * 0.9;
+  const st = $('#s2Statement');
+  const stk = eseg(t, 9.9, 10.5);
+  st.style.opacity = stk;
+  st.style.transform = 'translateY(' + mix(20, 0, stk).toFixed(1) + 'px)';
+  const cap = $('#s2Caption');
+  cap.style.opacity = eseg(t, 10.6, 11.1);
+  cap.textContent = '圆屏 / 方屏的安全区由手机按手表上报的 safe_inset_permille 注入，场景不用猜';
+}
+
+/* ---------------- 场景 3：渲染即投屏 ---------------- */
+(function () {
+  const host = $('#s3Packets');
+  for (let i = 0; i < 3; i++) {
+    const n = el('div', 'pkt');
+    n.style.cssText = 'position:absolute;width:30px;height:38px;border-radius:6px;border:1px solid rgba(74,198,255,.8);' +
+      'background:linear-gradient(150deg,rgba(74,198,255,.85),rgba(31,134,201,.25));' +
+      'box-shadow:0 0 18px rgba(74,198,255,.45);opacity:0;left:890px;top:622px';
+    n.dataset.i = i;
+    host.appendChild(n);
+  }
+  host.appendChild(el('div', '', '<span style="font-size:16px;color:#7c8698;letter-spacing:1px">JPEG 帧 →</span>')).style.cssText =
+    'position:absolute;left:898px;top:588px;opacity:0';
+  const stats = $('#s3Stats');
+  [['466×466', '屏幕'], ['7.0 fps', '实测帧率'], ['12 ms', '编码 + 回环'], ['11 kB', '每帧字节']].forEach(([v, l]) => {
+    stats.appendChild(el('div', 'stat', '<div class="v">' + v + '</div><div class="l">' + l + '</div>'));
+  });
+})();
+function renderS3(t) {
+  const s = SCENES[2];
+  $('#s3ChipA').style.opacity = eseg(t, 12.2, 12.8);
+  $('#s3ChipB').style.opacity = eseg(t, 13.0, 13.6);
+  const pin = eseg(t, 12.0, 12.8);
+  const ph = $('#s3Phone');
+  ph.style.opacity = pin;
+  ph.style.transform = 'translateY(' + mix(40, 0, pin).toFixed(1) + 'px) scale(' + mix(0.96, 1, pin).toFixed(3) + ')';
+  const win = eseg(t, 12.6, 13.4);
+  const wa = $('#s3Watch');
+  wa.style.opacity = win;
+  wa.style.transform = 'scale(' + mix(0.88, 1, win).toFixed(3) + ')';
+  $('#s3Link').style.opacity = eseg(t, 13.8, 14.3) * 0.9;
+
+  // 帧从左往右流
+  const label = $('#s3Packets').lastElementChild;
+  label.style.opacity = eseg(t, 14.0, 14.5) * (1 - seg(t, 20.2, 20.7));
+  const packets = $('#s3Packets').querySelectorAll('.pkt');
+  const run = eseg(t, 14.0, 14.6);
+  for (let i = 0; i < packets.length; i++) {
+    const period = 0.9;
+    const local = ((t - 14.0) / period + i / 3) % 1;
+    const on = run * seg(t, 14.0, 14.4) * (1 - seg(t, 20.4, 20.9));
+    packets[i].style.opacity = (on * Math.sin(Math.PI * local)).toFixed(3);
+    packets[i].style.transform = 'translateX(' + (local * 160).toFixed(1) + 'px)';
+  }
+  const st = $('#s3Stats');
+  st.style.opacity = eseg(t, 16.4, 17.0);
+  st.style.transform = 'translateY(' + mix(20, 0, eseg(t, 16.4, 17.0)).toFixed(1) + 'px)';
+}
+
+/* ---------------- 场景 4：线格式 ---------------- */
+const HDR_FIELDS = [
+  { name: 'magic', bytes: 2, color: '#2f6f8f' },
+  { name: 'ver', bytes: 1, color: '#2f7f9f' },
+  { name: 'type', bytes: 1, color: '#3a8fa8' },
+  { name: 'flags', bytes: 2, color: '#2f8f7f' },
+  { name: 'hdr_len', bytes: 2, color: '#3f7f9f' },
+  { name: 'seq', bytes: 4, color: '#4a7fb8' },
+  { name: 'payload_len', bytes: 2, color: '#8a6f9f' },
+  { name: 'hdr_crc', bytes: 2, color: '#a8604f' },
+];
+const VIDEO_SUB = [
+  ['0', 'frame_id', 'u32', '帧计数器'],
+  ['4', 'chunk_index', 'u16', '本块在帧内的序号'],
+  ['6', 'chunk_total', 'u16', '本帧总块数'],
+  ['8', 'codec', 'u8', '1 = MJPEG'],
+  ['10', 'width / height', 'u16', '编码尺寸'],
+  ['16', 'frame_bytes', 'u32', '整帧字节数'],
+];
+(function () {
+  const hdr = $('#s4Hdr');
+  const width = HDR_FIELDS.reduce((n, f) => n + f.bytes, 0);
+  const cell = 56, gap = 2;
+  const names = el('div');
+  names.style.cssText = 'display:flex;gap:' + gap + 'px;height:30px';
+  const bytes = el('div');
+  bytes.style.cssText = 'display:flex;gap:' + gap + 'px;margin-top:0';
+  const idx = el('div');
+  idx.style.cssText = 'display:flex;gap:' + gap + 'px;margin-top:6px';
+  let i = 0;
+  for (const f of HDR_FIELDS) {
+    const w = f.bytes * cell + (f.bytes - 1) * gap;
+    const n = el('div', 'hfield', f.name);
+    n.style.width = w + 'px';
+    n.style.background = f.color;
+    names.appendChild(n);
+    for (let b = 0; b < f.bytes; b++) {
+      const c = el('div', 'hbyte');
+      c.dataset.i = i++;
+      bytes.appendChild(c);
+      const x = el('div', 'hidx', String(i - 1));
+      x.style.width = cell + 'px';
+      idx.appendChild(x);
+    }
+  }
+  hdr.appendChild(names);
+  hdr.appendChild(bytes);
+  hdr.appendChild(idx);
+  hdr.appendChild(el('div', '', '<span class="mono" style="font-size:17px;color:#7c8698">' +
+    'magic = 0x57 0x50 ("WP") · 所有多字节整数小端 · 帧头恒 16 字节</span>'));
+
+  const rows = $('#s4SubRows');
+  VIDEO_SUB.forEach(r => {
+    rows.appendChild(el('div', 'subrow',
+      '<span class="off">@' + r[0] + '</span><span class="nm">' + r[1] + '</span>' +
+      '<span class="ty">' + r[2] + '</span><span class="ds">' + r[3] + '</span>'));
+  });
+
+  const chunks = $('#s4Chunks');
+  for (let i = 0; i < 37; i++) chunks.appendChild(el('div', 'chunk'));
+  const dots = $('#s4CreditDots');
+  for (let i = 0; i < 64; i++) dots.appendChild(el('div', 'credit'));
+  const stats = $('#s4Stats');
+  [['8 123 B', '编码后的一帧'], ['9 455 B', '线上总字节'], ['14.1%', '协议开销']].forEach(([v, l]) => {
+    stats.appendChild(el('div', 'stat', '<div class="v">' + v + '</div><div class="l">' + l + '</div>'));
+  });
+})();
+function renderS4(t) {
+  const t0 = SCENES[3].start;
+  const cells = $('#s4Hdr').querySelectorAll('.hbyte');
+  for (let i = 0; i < cells.length; i++) {
+    const k = eseg(t, t0 + 0.35 + i * 0.035, t0 + 0.65 + i * 0.035);
+    cells[i].style.opacity = k;
+    cells[i].style.transform = 'translateY(' + mix(-14, 0, k).toFixed(1) + 'px)';
+  }
+  const fields = $('#s4Hdr').querySelectorAll('.hfield');
+  fields.forEach((f, i) => { f.style.opacity = eseg(t, t0 + 0.25 + i * 0.05, t0 + 0.55 + i * 0.05); });
+  const subRows = $('#s4SubRows').children;
+  for (let i = 0; i < subRows.length; i++) {
+    const k = eseg(t, t0 + 1.2 + i * 0.09, t0 + 1.55 + i * 0.09);
+    subRows[i].style.opacity = k;
+    subRows[i].style.transform = 'translateX(' + mix(20, 0, k).toFixed(1) + 'px)';
+  }
+  $('#s4Frame').style.opacity = eseg(t, t0 + 2.1, t0 + 2.6);
+  const chunks = $('#s4Chunks').children;
+  const per = 0.042;
+  for (let i = 0; i < chunks.length; i++) {
+    const k = eseg(t, t0 + 2.4 + i * per, t0 + 2.65 + i * per);
+    chunks[i].style.opacity = 0.35 + 0.65 * k;
+    chunks[i].style.background = i === 0 ? '#1d3f4f' : (i === 36 ? '#3a3226' : '#12202e');
+    chunks[i].style.borderColor = i === 0 ? 'rgba(74,198,255,.85)' : (i === 36 ? 'rgba(255,179,92,.75)' : '#244055');
+    chunks[i].style.transform = 'scaleY(' + mix(0.7, 1, k).toFixed(3) + ')';
+  }
+  const dots = $('#s4CreditDots').children;
+  const sent = Math.round(37 * seg(t, t0 + 3.0, t0 + 4.6));
+  for (let i = 0; i < dots.length; i++) {
+    const used = i < sent;
+    dots[i].style.background = used ? '#0f1c26' : '#123b4d';
+    dots[i].style.borderColor = used ? '#1b2a36' : '#1f6f8d';
+  }
+  $('#s4Credit').style.opacity = eseg(t, t0 + 2.9, t0 + 3.4);
+  const stats = $('#s4Stats');
+  const sk = eseg(t, t0 + 3.6, t0 + 4.1);
+  stats.style.opacity = sk;
+  stats.style.transform = 'translateY(' + mix(18, 0, sk).toFixed(1) + 'px)';
+  $('#s4Formula').style.opacity = eseg(t, t0 + 1.4, t0 + 1.9) * 0.95;
+  $('#s4Note').style.opacity = eseg(t, t0 + 4.9, t0 + 5.4) * 0.95;
+}
+
+/* ---------------- 场景 5：码率自适应 ---------------- */
+const QUALITY_BARS = [
+  { q: 85, kb: 24.2, h: 300 },
+  { q: 70, kb: 17.1, h: 212 },
+  { q: 55, kb: 14.0, h: 174 },
+  { q: 40, kb: 11.9, h: 148 },
+];
+const RATE_RULES = [
+  ['queue_depth > 4 帧', 'quality −8 / 秒'],
+  ['5 s 内丢帧 > 10', 'quality −10'],
+  ['decode_ms > 0.8 × 帧间隔', 'fps −2'],
+  ['10 s 无异常', 'quality +4'],
+];
+(function () {
+  const chart = $('#s5Chart');
+  QUALITY_BARS.forEach((b, i) => {
+    const n = el('div', 'bar');
+    n.style.left = (30 + i * 196) + 'px';
+    n.style.height = '0px';
+    n.dataset.i = i;
+    chart.appendChild(n);
+    const lbl = el('div', 'barlbl', 'q' + b.q + '<br><span style="color:#7fc4ff">' + b.kb.toFixed(1) + ' kB</span>');
+    lbl.style.left = (10 + i * 196) + 'px';
+    lbl.style.bottom = '-60px';
+    lbl.style.width = '172px';
+    chart.appendChild(lbl);
+  });
+  const rules = $('#s5Rules');
+  RATE_RULES.forEach(([o, a]) => {
+    rules.appendChild(el('div', 'rule', '<span class="obs">' + o + '</span><span class="act">' + a + '</span>'));
+  });
+})();
+function renderS5(t) {
+  const t0 = SCENES[4].start;
+  const bars = $('#s5Chart').querySelectorAll('.bar');
+  QUALITY_BARS.forEach((b, i) => {
+    const k = eseg(t, t0 + 0.5 + i * 0.16, t0 + 1.0 + i * 0.16);
+    bars[i].style.height = (b.h * k).toFixed(1) + 'px';
+  });
+  const step = Math.min(6, Math.floor(Math.max(0, t - (t0 + 2.2)) / 0.42));
+  const q = Math.max(40, 85 - step * 8);
+  // 质量到字节数是非线性的：在四个实测点之间线性取值，别把 q45 说成 11.9 kB
+  const pts = [[40, 11.9], [55, 14.0], [70, 17.1], [85, 24.2]];
+  let size = 24.2;
+  for (let i = 1; i < pts.length; i++) {
+    if (q <= pts[i][0]) {
+      const [q0, s0] = pts[i - 1], [q1, s1] = pts[i];
+      size = s0 + (s1 - s0) * (q - q0) / (q1 - q0);
+      break;
+    }
+  }
+  $('#s5Q').textContent = String(q);
+  $('#s5Size').textContent = '≈ ' + size.toFixed(1) + ' kB';
+  const activeRule = seg(t, t0 + 2.0, t0 + 2.3) > 0.5 ? 0 : -1;
+  const rows = $('#s5Rules').children;
+  for (let i = 0; i < rows.length; i++) {
+    const on = i === activeRule;
+    rows[i].style.background = on ? 'rgba(74,198,255,.10)' : 'transparent';
+    rows[i].style.borderLeft = on ? '3px solid var(--accent)' : '3px solid transparent';
+    rows[i].style.opacity = i === 0 ? 1 : 0.55;
+  }
+  $('#s5Panel').style.opacity = eseg(t, t0 + 1.6, t0 + 2.1);
+  $('#s5Panel').style.transform = 'translateX(' + mix(30, 0, eseg(t, t0 + 1.6, t0 + 2.1)).toFixed(1) + 'px)';
+  $('#s5Caption').style.opacity = eseg(t, t0 + 4.6, t0 + 5.1);
+}
+
+/* ---------------- 场景 6：触控回传 ---------------- */
+function renderS6(t) {
+  const t0 = SCENES[5].start;
+  const win = eseg(t, t0 + 0.2, t0 + 0.8);
+  const wrap = $('#s6WatchWrap');
+  wrap.style.opacity = win;
+  wrap.style.transform = 'translateY(' + mix(30, 0, win).toFixed(1) + 'px)';
+  const pin = eseg(t, t0 + 0.5, t0 + 1.1);
+  const phone = $('#s6PhoneWrap');
+  phone.style.opacity = pin;
+  phone.style.transform = 'translateX(' + mix(40, 0, pin).toFixed(1) + 'px)';
+
+  // 点按：36.3 出现，36.6 按下
+  const tap = t - t0;
+  const dot = $('#s6TouchDot');
+  const dotOn = seg(t, t0 + 0.85, t0 + 1.05) * (1 - seg(t, t0 + 1.75, t0 + 1.95));
+  dot.style.opacity = dotOn;
+  dot.style.left = '244px';
+  dot.style.top = '449px';
+  dot.style.transform = 'scale(' + mix(1.35, 0.85, seg(t, t0 + 1.3, t0 + 1.45)).toFixed(3) + ')';
+  dot.style.background = seg(t, t0 + 1.3, t0 + 1.45) > 0.5 ? 'rgba(74,198,255,.30)' : 'rgba(74,198,255,.12)';
+
+  // 触控包从手表飞回手机
+  const fly = seg(t, t0 + 1.45, t0 + 2.05);
+  const packet = $('#s6Packet');
+  packet.style.opacity = (fly > 0 && fly < 1 ? 1 : 0) * 0.95;
+  packet.style.transform = 'translateX(' + (fly * 250).toFixed(1) + 'px) scale(' + mix(0.9, 1, fly).toFixed(3) + ')';
+  $('#s6Path').style.opacity = seg(t, t0 + 1.3, t0 + 1.7) * (1 - seg(t, t0 + 2.4, t0 + 2.8)) * 0.9;
+
+  // 手机切到音乐，手表跟着切（硬切 0.18 s：叠影比切页更难看）
+  $('#s6PhoneMusic').style.opacity = eseg(t, t0 + 2.15, t0 + 2.33);
+  const chip = $('#s6Chip');
+  chip.style.opacity = eseg(t, t0 + 2.6, t0 + 3.1);
+  const cap = $('#s6Caption');
+  cap.style.opacity = eseg(t, t0 + 3.2, t0 + 3.7);
+  cap.textContent = '手表没有 UI 逻辑：DOWN / MOVE / UP 三个事件，就够让手机里的页面自己动';
+}
+
+/* ---------------- 场景 7：仓库 ---------------- */
+const REPO_CARDS = [
+  { k: '规范', v: '00–07', d: '9 章文档：帧头、CRC、会话、分块与 Credit、触控、渲染、能力位' },
+  { k: '工具链', v: '49 项', d: 'tools/test_protocol.py；gen_traces.py 生成提交进仓库的 9 455 字节 trace' },
+  { k: 'Android', v: '163 + 18', d: 'sdk 163 项 JVM 测试，demo 18 项；两个 App 都能直接出 Debug 包' },
+  { k: '承载', v: '4 条', d: 'BLE GATT 与 Wi-Fi TCP 已实现；L2CAP 骨架，经典蓝牙 SPP 规范已定' },
+];
+(function () {
+  const host = $('#s7Cards');
+  REPO_CARDS.forEach((c, i) => {
+    const n = el('div', 'card', '<div style="font-size:18px;letter-spacing:3px;color:var(--accent)">' + c.k + '</div>' +
+      '<div style="font-size:44px;font-weight:700;margin-top:12px">' + c.v + '</div>' +
+      '<div class="cd">' + c.d + '</div>');
+    n.style.cssText += 'position:relative;left:0;top:0;width:430px;height:252px';
+    n.dataset.i = i;
+    host.appendChild(n);
+  });
+})();
+function renderS7(t) {
+  const t0 = SCENES[6].start;
+  const cards = $('#s7Cards').children;
+  for (let i = 0; i < cards.length; i++) {
+    const k = eseg(t, t0 + 0.5 + i * 0.16, t0 + 1.0 + i * 0.16);
+    cards[i].style.opacity = k;
+    cards[i].style.transform = 'translateY(' + mix(30, 0, k).toFixed(1) + 'px)';
+  }
+  const TREE = [
+    ['docs/spec/', '00–07 章 + 99-changelog，字节级字段表'],
+    ['tools/', 'test_protocol.py · gen_traces.py · lint_scenes.py'],
+    ['examples/', 'watch-ui/ 场景 · protocol-traces/ 提交的字节'],
+    ['android/', 'sdk/ · demo/ · sink/ · art/'],
+  ];
+  const tree = $('#s7Tree');
+  const tk = eseg(t, t0 + 1.5, t0 + 2.0);
+  tree.style.opacity = tk;
+  tree.style.transform = 'translateY(' + mix(20, 0, tk).toFixed(1) + 'px)';
+  tree.innerHTML = TREE.map(([p, d], i) => {
+    const k = eseg(t, t0 + 1.7 + i * 0.14, t0 + 2.0 + i * 0.14);
+    return '<div style="opacity:' + k.toFixed(2) + '"><span style="color:#4ac6ff">' + p + '</span>' +
+      '<span style="padding-left:16px">' + d + '</span></div>';
+  }).join('');
+  const f = $('#s7Foot');
+  f.style.opacity = eseg(t, t0 + 3.4, t0 + 3.9) * 0.95;
+  f.innerHTML = '<span class="tag" style="margin:0 8px">协议 v0.1</span>' +
+    '<span class="tag" style="margin:0 8px">字节级 trace 入库</span>' +
+    '<span class="tag" style="margin:0 8px">Apache 2.0</span>';
+}
+
+/* ---------------- 场景 8：收尾 ---------------- */
+function renderS8(t) {
+  const s = SCENES[7], t0 = s.start;
+  const lin = eseg(t, t0 + 0.15, t0 + 0.75);
+  const lock = $('#s8Lock');
+  lock.style.opacity = lin;
+  lock.style.transform = 'translateY(' + mix(24, 0, lin).toFixed(1) + 'px) scale(' + mix(1, 1.06, seg(t, s.end - 1.6, s.end - 0.9)).toFixed(3) + ')';
+  const cmd = $('#s8Command');
+  cmd.style.opacity = eseg(t, t0 + 1.4, t0 + 2.0);
+  const tags = $('#s8Tags');
+  tags.style.opacity = eseg(t, t0 + 2.0, t0 + 2.5);
+  tags.innerHTML = '<span class="tag" style="margin:0 8px">MJPEG 基线</span>' +
+    '<span class="tag" style="margin:0 8px">BLE / Wi-Fi</span>' +
+    '<span class="tag" style="margin:0 8px">Kotlin SDK</span>' +
+    '<span class="tag" style="margin:0 8px">触控回传</span>';
+  $('#s8Url').style.opacity = eseg(t, t0 + 2.5, t0 + 3.1);
+  $('#s8Url').style.transform = 'translateY(' + mix(18, 0, eseg(t, t0 + 2.5, t0 + 3.1)).toFixed(1) + 'px)';
+  $('#s8Tail').style.opacity = eseg(t, t0 + 2.9, t0 + 3.5) * 0.95;
+}
+
+/* ---------------- 手表场景（真 HTML，逐帧驱动） ---------------- */
+const BASE_DATA = { clock: '12:19', date: '周六 10 月 17 日', battery: '92' };
+const frames = { hero: null, touch: null };
+const driven = { hero: {}, touch: {} };
+
+function prepareFrame(id, key) {
+  const f = document.getElementById(id);
+  const doc = f.contentDocument, win = f.contentWindow;
+  if (!win || !win.watchplay) return;
+  // 场景里的 0.12 s 过渡会让任意时刻的画面取决于真实时间，逐帧截图必须关掉
+  const style = doc.createElement('style');
+  style.textContent = '.scene{transition:none!important}.btn-switch,.btn-ctl{transition:none!important}';
+  doc.head.appendChild(style);
+  win.watchplay.data = Object.assign({}, BASE_DATA);
+  win.watchplay.render();
+  frames[key] = f;
+}
+
+function drive(key, scene, extra) {
+  const f = frames[key];
+  if (!f) return;
+  const win = f.contentWindow;
+  if (!win || !win.watchplay) return;
+  const state = driven[key];
+  if (state.scene !== scene) {
+    win.watchplay.go(scene);
+    state.scene = scene;
+  }
+  const data = Object.assign({}, BASE_DATA, extra || {});
+  const sig = JSON.stringify(data);
+  if (state.sig !== sig) {
+    win.watchplay.data = data;
+    win.watchplay.render();
+    state.sig = sig;
+  }
+}
+
+/* ---------------- 渲染调度 ---------------- */
+const RENDERERS = [renderS1, renderS2, renderS3, renderS4, renderS5, renderS6, renderS7, renderS8];
+function framesFor(t) {
+  // 第 3 段：表盘静止在 12:19，和手机截图里的时间一致
+  drive('hero', 'face', {});
+  // 第 6 段：36.4 点在「音乐」上，之后切到音乐页并让进度条走起来
+  const t0 = SCENES[5].start;
+  if (t < t0 + 2.55) {
+    drive('touch', 'face', {});
+  } else {
+    const p = 0.12 + 0.30 * eseg(t, t0 + 2.9, t0 + 7.0);
+    drive('touch', 'music', { progress: p.toFixed(3), playing: 'true' });
+  }
+}
+function renderAt(tSec) {
+  drawBg(tSec);
+  framesFor(tSec);
+  for (let i = 0; i < SCENES.length; i++) {
+    const s = SCENES[i], root = document.getElementById(s.id);
+    const fi = eseg(tSec, s.start, s.start + FADE_IN);
+    const fo = eseg(tSec, s.end - FADE_OUT, s.end);
+    const env = fi * (1 - fo);
+    const visible = env > 0.002;
+    root.style.opacity = visible ? env.toFixed(4) : 0;
+    root.style.visibility = visible ? 'visible' : 'hidden';
+    if (visible) {
+      root.style.transform = 'translateY(' + (mix(26, 0, fi) + mix(0, -26, fo)).toFixed(1) + 'px)';
+      RENDERERS[i](tSec);
+    }
+  }
+}
+window.seek = msec => renderAt(msec / 1000);
+window.__total = TOTAL;
+window.__fps = FPS;
+window.__scenes = SCENES.map(s => s.id + ':' + s.start + '-' + s.end);
+
+/* 舞台固定 1920x1080，按窗口等比缩放并居中（多出来的地方是黑边），
+   这样 1280x720 之类的小窗口也不会把画面裁掉；1920x1080 时 scale = 1，逐帧截图不受影响 */
+function fit() {
+  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
+  $('#stage').style.transform = 'translate(-50%,-50%) scale(' + s.toFixed(6) + ')';
+}
+window.__fit = fit;
+window.addEventListener('resize', fit);
+
+/* ---------------- 浏览器里预览用 ---------------- */
+function loop() {
+  const t = performance.now() / 1000;
+  if (t <= TOTAL + 0.6) renderAt(t % (TOTAL + 0.6));
+  requestAnimationFrame(loop);
+}
+const params = new URLSearchParams(location.search);
+function boot() {
+  fit();
+  if (params.has('t')) { renderAt(parseFloat(params.get('t'))); return; }
+  if (params.has('static')) { renderAt(0); return; }
+  loop();
+}
+window.addEventListener('load', () => {
+  const imgs = Array.from(document.images);
+  const iframes = Array.from(document.querySelectorAll('iframe'));
+  Promise.all(iframes.map(f => new Promise(done => {
+    if (f.contentDocument && f.contentDocument.readyState === 'complete') return done();
+    f.addEventListener('load', () => done(), { once: true });
+  })))
+    .then(() => Promise.all(imgs.map(im => im.decode ? im.decode().catch(() => {}) : Promise.resolve())))
+    .then(() => {
+      prepareFrame('frameHero', 'hero');
+      prepareFrame('frameTouch', 'touch');
+      boot();
+      window.__ready = true;
+    });
+});
+</script>
+</body>
+</html>

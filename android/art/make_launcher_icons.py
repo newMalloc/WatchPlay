@@ -22,6 +22,10 @@ cuts the phone out of frame.
 
 The ground inside the tile's rounded corners is cut away, so a squircle mask
 shows the background layer instead of a paler seam.
+
+The same crop is also written to docs/video/logo.png for the introduction
+animation, so the mark in the video and the mark on the launcher cannot drift
+apart.
 """
 
 from __future__ import annotations
@@ -49,6 +53,11 @@ ROUND_CROP = 1380
 BACKGROUND = ((212, 233, 254), (212, 234, 255), (237, 254, 244), (237, 254, 244))
 
 DENSITIES = {"mdpi": 1.0, "hdpi": 1.5, "xhdpi": 2.0, "xxhdpi": 3.0, "xxxhdpi": 4.0}
+
+# The video draws the mark at up to 184 px on a 1080p stage; 512 keeps it crisp
+# when a frame is re-shared at a larger size.
+LOGO = ANDROID.parent / "docs/video/logo.png"
+LOGO_PX = 512
 
 # Legacy (pre-adaptive) icons are 48 dp at mdpi. minSdk is 26, so the adaptive
 # XML is what every device actually draws; these exist for icon extractors.
@@ -145,6 +154,12 @@ def main() -> None:
         anydpi.mkdir(parents=True, exist_ok=True)
         for name in ("ic_launcher.xml", "ic_launcher_round.xml"):
             (anydpi / name).write_text(ADAPTIVE_LAYERS, encoding="utf-8", newline="\n")
+
+    logo = centre_crop(source(), CROP).resize((LOGO_PX, LOGO_PX), Image.LANCZOS).convert("RGBA")
+    logo.putalpha(tile_alpha(LOGO_PX))
+    LOGO.parent.mkdir(parents=True, exist_ok=True)
+    logo.save(LOGO, optimize=True)
+    print(f"docs/video/logo.png: {LOGO_PX}px")
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 | `docs/spec/` | The protocol, 00–07 plus 99-changelog |
 | `docs/diagrams/` | Figures: Mermaid source `.mmd` + rendered `.svg` |
 | `docs/guides/` | Usage guide |
+| `docs/video/` | The 53 s introduction animation: one HTML page rendered frame by frame into an mp4, with a synthesised soundtrack. The final mp4/GIF/poster are committed; `frames/` and `out/` are not |
 | `tools/` | Executable reference implementation, tests, linters (stdlib only) |
 | `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
 | `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app (renders `examples/watch-ui/demo-scene.html` through `WebViewRenderModule`, loopback demo, BLE scan/connect) |
