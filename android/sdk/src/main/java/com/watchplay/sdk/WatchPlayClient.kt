@@ -331,7 +331,7 @@ class WatchPlayClient private constructor(
      *  * render: none, which means no WebView is driven by the SDK.
      *
      * @property transport bearer to run the session over. Use a loopback pair for tests and the demo;
-     *   [com.watchplay.sdk.transport.BleGattTransport] for real hardware (once implemented).
+     *   [com.watchplay.sdk.transport.BleGattTransport] for real hardware.
      */
     class Builder(private val transport: TransportModule) {
 

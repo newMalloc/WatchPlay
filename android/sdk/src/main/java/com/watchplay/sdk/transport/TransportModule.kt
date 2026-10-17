@@ -73,7 +73,8 @@ interface TransportListener {
  * ## Implementations
  *
  *  * [LoopbackTransport] — fully working, in-memory; used by the demo and the tests.
- *  * [BleGattTransport] — the mandatory baseline bearer; skeleton (see its KDoc).
+ *  * [BleGattTransport] — the mandatory baseline bearer. Complete, unit-tested against a fake radio
+ *    ([GattIo]); not yet exercised against hardware.
  *  * [BleL2capTransport] — API 29+ L2CAP CoC, higher throughput; skeleton (see its KDoc).
  */
 interface TransportModule {

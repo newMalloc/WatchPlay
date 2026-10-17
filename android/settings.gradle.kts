@@ -1,8 +1,9 @@
 // WatchPlay — Android phone side (Gradle settings).
 //
-// Two modules:
+// Three modules:
 //   :sdk  — com.watchplay.sdk, the reusable protocol/render/capture/transport library.
-//   :demo — com.watchplay.demo, a tiny AppCompat app that drives :sdk over LoopbackTransport.
+//   :demo — com.watchplay.demo, a tiny AppCompat app that drives :sdk.
+//   :sink — com.watchplay.sink, the watch side on a second device (GATT server + JPEG decode).
 //
 // Offline-first note: the `resolutionStrategy.eachPlugin` block below maps the Android plugin ids
 // straight onto their implementation modules, so a machine with a warm
@@ -41,3 +42,4 @@ rootProject.name = "WatchPlay-Android"
 
 include(":sdk")
 include(":demo")
+include(":sink")
