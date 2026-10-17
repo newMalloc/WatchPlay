@@ -119,7 +119,7 @@
 | 音频未进协议 | 只声明 `AUDIO.path`，A2DP 链路的建立流程未标准化 | 各家自行协商，见 [07-capabilities.md §5](07-capabilities.md) |
 | Wi-Fi 承载未实现 | 规范已写（[01-transport.md §4](01-transport.md)），无代码 | 高码率场景受限 |
 | 经典蓝牙承载未实现 | 规范已写（[01-transport.md §5](01-transport.md)），无代码、无参考硬件 | 只有 BR/EDR 的设备暂时无法接入 |
-| Profile B 无参考硬件验收 | 编码器已实现，但没有一块板能把 H.264 硬解跑起来 | B 档实际不可验证 |
+| Profile B 无参考硬件验收 | 编码器是桩，且没有一块板能把 H.264 硬解跑起来 | B 档实际不可验证 |
 
 #### ESP32-S3 参考实现的限制（换板即消失）
 
@@ -128,6 +128,7 @@
 | 不支持经典蓝牙 | 无 A2DP，也没有 BR/EDR 数据链路 | 参考实现只能走 BLE，音频由手机本地播放 |
 | H.264 只能软解 | `hardware_decode = 0`，`max_fps = 8` | `Negotiator` 不会选 Profile B |
 | 参考接线只做单点触控 | FT3168 支持多点，参考实现只上报一个 `pointer_id` | 复杂手势不可用 |
+| 手机端 BLE 传输是骨架 | `BleGattTransport` / `BleL2capTransport` 有状态机、Credit 与 MTU 记账，`open()` 直接报错 | 目前只有 `LoopbackTransport` 能跑，与任何真表都连不上 |
 
 ---
 
