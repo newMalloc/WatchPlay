@@ -1,53 +1,61 @@
 # AGENTS.md
 
-WatchPlay 是手机 → 手表的投屏协议：手机用 HTML + CSS 渲染手表界面，WebView 捕获后编码为 MJPEG/H.264，经 BLE 送到手表显示，触控回传。本仓库 = 协议规范 + 参考实现。
+WatchPlay is a phone → watch mirroring protocol: the phone renders a watch UI in HTML + CSS, captures it from a WebView, encodes it as MJPEG/H.264 and sends it over BLE; touches travel back. This repository holds the specification and the reference implementations.
 
-## 权威顺序
+## The spec wins
 
-`docs/spec/` 是协议权威。规范和代码冲突时按规范改代码，不改规范去迁就实现。规范里每个字节级断言都应该能由 `tools/` 里的代码或 trace 验证。
+`docs/spec/` is authoritative. When code and spec disagree, fix the code. Every byte-level claim in the spec is expected to be checkable against `tools/` or a committed trace.
 
-代码风格、提交格式、测试要求见 [CONTRIBUTING.md](CONTRIBUTING.md)，这里不重复。
+Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRIBUTING.md). Only the rules that bind an agent are repeated here.
 
-## 布局
+## Layout
 
-| 路径 | 内容 |
+| Path | Contents |
 | :--- | :--- |
-| `docs/spec/` | 协议规范，00–07 + 99-changelog |
-| `docs/diagrams/` | 插图：Mermaid 源 `.mmd` + 渲染好的 `.svg` |
-| `docs/guides/` | 使用指南 |
-| `tools/` | 协议参考实现、测试、校验脚本（仅标准库） |
-| `examples/` | 示例手表 UI（HTML + CSS）、字节级 trace |
-| `android/sdk`、`android/demo` | 手机端 Kotlin SDK 与示例 App |
-| `watch/docs/` | 手表端参考架构，目前只有文档，没有固件源码 |
+| `docs/spec/` | The protocol, 00–07 plus 99-changelog |
+| `docs/diagrams/` | Figures: Mermaid source `.mmd` + rendered `.svg` |
+| `docs/guides/` | Usage guide |
+| `tools/` | Executable reference implementation, tests, linters (stdlib only) |
+| `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
+| `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app |
+| `watch/docs/` | Watch-side reference architecture. Documentation only, no firmware source |
 
-## 跑什么
+## Commands
 
-无第三方依赖，Python 3.10+ 即可：
-
-```pwsh
-python tools/test_protocol.py        # 46 项，末尾会顺带查文档链接
-python tools/gen_traces.py --check   # 提交的 trace 与生成器是否一致
-python tools/lint_scenes.py          # examples/watch-ui 是否符合渲染规范
-python tools/check_doc_links.py      # 单独查相对链接与锚点
-```
-
-改了 `docs/diagrams/*.mmd` 之后：
+Python 3.10+, no third-party packages:
 
 ```pwsh
-python tools/render_diagrams.py      # 唯一需要联网的脚本
+python tools/test_protocol.py        # 46 tests; also runs the doc link check
+python tools/gen_traces.py --check   # committed traces match the generator
+python tools/lint_scenes.py          # examples/watch-ui obeys the rendering spec
+python tools/check_doc_links.py      # relative links and anchors
 ```
 
-Android 端在 `android/`，`./gradlew :sdk:assembleDebug :sdk:test`，JDK 17 + SDK 34。
+After editing `docs/diagrams/*.mmd`:
 
-## 改动要连带的东西
+```pwsh
+python tools/render_diagrams.py      # the only script that needs the network
+```
 
-- 协议字节：`watchplay_proto.py` + `test_protocol.py` 的断言 + `gen_traces.py` 重新生成 trace + `99-changelog.md` 条目。缺一样 CI 会挂。
-- 改了 `.mmd` 没重渲染 SVG，提交的图就和源码不一致。CI 不查这个，只能靠人。
-- `tools/` 里新增 import 要同步 `TestToolsAreStdlibOnly.ALLOWED`：它用 `ast` 看真实导入，不是正则匹配文本。
-- `TestFrozenConstants` 冻结已发布的线值。它拦的是顺手改常量，不是障碍。
+Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test`, JDK 17 + SDK 34.
 
-## 工程上的坑
+## Changes that must travel together
 
-- Android 用 AGP 9.1 的内置 Kotlin 支持。别加 `org.jetbrains.kotlin.android` 插件，它会挂在 `BaseExtension` 类型转换上。Gradle 走 wrapper 里的 9.3.1。`android/local.properties` 是本地文件，不提交。
-- 分块公式是 `ceil(frame_bytes / (max_chunk_bytes - 20))`，不是 `ceil(frame_bytes / max_chunk_bytes)`。8123 字节 @ 244 是 37 块，34 是错的。
-- 插图渲染时会把字体栈重写成 Arial/Helvetica。渲染服务端用 Liberation Sans 度量标签宽度，客户端若有 Trebuchet MS（宽约 18%）会把 `foreignObject` 里的文字裁掉。别把这段重写删了。
+- Protocol bytes: `watchplay_proto.py`, the assertions in `test_protocol.py`, a regenerated trace via `gen_traces.py`, and an entry in `99-changelog.md`. CI fails on any of these missing.
+- A `.mmd` edit without re-rendering leaves the SVG out of sync with its source. CI does not catch this.
+- Adding an import to `tools/` requires adding it to `TestToolsAreStdlibOnly.ALLOWED`; that test parses real imports with `ast`, so text matching does not fool it.
+- `TestFrozenConstants` freezes released wire values. It is there to stop drive-by constant edits, not to be relaxed.
+
+## Documentation and comments
+
+- Explain why, not what. A comment that restates the next line is deleted, not kept.
+- No play-by-play. Do not narrate a diff, a debugging session or a build order ("first I tried X, then Y") in comments, commit bodies or docs. State the decision and the constraint that forced it.
+- Commit bodies: one or two sentences on what changed and why, plus whatever a reviewer would otherwise trip over. Not a per-file list.
+- Replace stale prose instead of annotating it. A "was X, now Y" note belongs in `99-changelog.md` and nowhere else.
+- Tables over paragraphs; numbers over adjectives.
+
+## Pitfalls
+
+- Android builds on AGP 9.1's built-in Kotlin support. Do not add the `org.jetbrains.kotlin.android` plugin — it dies on a `BaseExtension` cast. Gradle comes from the wrapper (9.3.1). `android/local.properties` is local, never committed.
+- Chunking is `ceil(frame_bytes / (max_chunk_bytes - 20))`, not `ceil(frame_bytes / max_chunk_bytes)`. 8123 bytes at 244 is 37 chunks; 34 is wrong.
+- Diagram rendering rewrites the font stack to Arial/Helvetica. The render service measures label widths with Liberation Sans, so a client that has Trebuchet MS (~18% wider) would clip text inside `foreignObject`. Do not remove that rewrite.
