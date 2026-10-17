@@ -21,7 +21,7 @@
 
 ![WatchPlay 架构](docs/diagrams/architecture.svg)
 
-音频：ESP32-S3 无经典蓝牙，不支持 A2DP，音频由手机本地播放。带经典蓝牙的芯片（如炬芯 ATS3089）可走 A2DP 独立链路。
+音频不在数据通道里：本协议只传画面与触控。带 A2DP 的设备可以让音频走独立链路，其余设备由手机本地播放。
 
 ## 编码 Profile
 
@@ -30,7 +30,16 @@
 | **A: MJPEG** | 低端 MCU（ESP32-S3） | 手机端压 JPEG | 150–300 KB/s @ 10 fps | JPEG 硬解，10–15 fps |
 | **B: H.264** | 中高端（带硬解） | MediaCodec Baseline | 200–800 kbps | 硬解，15–30 fps |
 
-ESP32-S3 只能软解 H.264，因此上报 `hardware_decode = 0`，协商时自动退回 Profile A。参数细节见 [04-video.md](docs/spec/04-video.md)。
+A 是基线，B 是省带宽的可选项。哪一档由协商按硬件能力决定：软解 H.264 的芯片（如 ESP32-S3）上报 `hardware_decode = 0`，自动退回 A。参数细节见 [04-video.md](docs/spec/04-video.md)。
+
+## 承载
+
+| 承载 | 适用设备 | 状态 |
+| :--- | :--- | :--- |
+| BLE GATT | 基线，任何支持 BLE 的设备 | 已实现，未真机联调 |
+| BLE L2CAP CoC | 手机 Android 10+，开销低于 GATT | 已实现，未真机联调 |
+| 经典蓝牙 RFCOMM (SPP) | 只有 BR/EDR、没有可用 BLE 的设备 | 规范已定，未实现 |
+| Wi-Fi TCP | 需要高码率的场景 | 规范已定，未实现 |
 
 ## 仓库结构
 
@@ -38,7 +47,7 @@ ESP32-S3 只能软解 H.264，因此上报 `hardware_decode = 0`，协商时自�
 docs/
   spec/                    协议规范（权威）
     00-overview.md           总览与设计目标
-    01-transport.md          承载：BLE GATT / L2CAP CoC / Wi-Fi
+    01-transport.md          承载：BLE GATT / L2CAP CoC / 经典蓝牙 SPP / Wi-Fi
     02-wire-format.md        16 字节帧头、CRC、帧类型
     03-session.md            握手、能力协商、状态机、心跳
     04-video.md              分块、Credit 流控、丢帧恢复
@@ -51,7 +60,7 @@ docs/
 android/
   sdk/                     手机端 Kotlin SDK（com.watchplay.sdk）
   demo/                    示例 App
-watch/                     ESP32-S3 手表端参考实现
+watch/                     手表端参考架构（文档；示例硬件 ESP32-S3）
 tools/                    协议参考实现与校验工具（仅标准库）
 examples/
   watch-ui/                示例手表 UI（HTML+CSS）
@@ -65,7 +74,7 @@ examples/
 ```pwsh
 git clone https://github.com/newMalloc/WatchPlay
 cd WatchPlay
-python tools/test_protocol.py        # 46 项一致性测试
+python tools/test_protocol.py        # 48 项一致性测试
 python tools/gen_traces.py --check   # trace 与规范一致
 python tools/lint_scenes.py          # 示例场景符合渲染规范
 python tools/check_doc_links.py      # 文档交叉引用与锚点
@@ -78,20 +87,22 @@ Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.m
 | 阶段 | 目标 |
 | :--- | :--- |
 | 第一阶段 | 协议 v0.1，MJPEG 端到端 Demo，466×466 @ 10 fps，延迟 < 200 ms |
-| 第二阶段 | 地图导航 + 音乐播放，H.264 支持，Wi-Fi 通道 |
+| 第二阶段 | 地图导航 + 音乐播放，经典蓝牙承载，H.264 支持，Wi-Fi 通道 |
 | 第三阶段 | Android SDK 发布，协议 v1.0，兼容性测试套件，iOS 启动 |
 | 第四阶段 | 厂商接入，WatchPlay Certified 认证 |
 
 | 里程碑 | 交付物 | 状态 |
 | :--- | :--- | :--- |
-| M1 | MJPEG 投屏 Demo | 协议规范 v0.1 已完成 |
-| M2 | 地图导航 + 音乐播放 | |
-| M3 | H.264 + Wi-Fi 通道 | |
-| M4 | Android SDK | |
-| M5 | 协议 v1.0 + 认证计划 | |
-| M6 | 首个厂商接入 | |
+| M1 | MJPEG 投屏 Demo | 协议规范 v0.1 已完成；真机 Demo 未开始 |
+| M2 | 地图导航 + 音乐播放 | 场景骨架已就位，未跑通 |
+| M3 | H.264 + Wi-Fi 通道 | Wi-Fi 与经典蓝牙承载：规范已定，无实现；H.264：编码器已实现，无参考硬件可验收 |
+| M4 | Android SDK | 可构建（65 项 JVM 测试），未发布 |
+| M5 | 协议 v1.0 + 认证计划 | 未开始 |
+| M6 | 首个厂商接入 | 未开始 |
 
 ## 参考硬件
+
+以下只是**一块**能跑通参考实现的板子，协议不依赖它的任何特性：换芯片、换屏、换承载都不需要改协议。
 
 | 端 | 硬件 |
 | :--- | :--- |

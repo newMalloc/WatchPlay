@@ -177,7 +177,7 @@ cd android
 
 ## 第 3 步：跑通手表端
 
-参考硬件：[LilyGO T-Display S3 AMOLED 1.43](../spec/00-overview.md)（ESP32-S3R8、8 MB PSRAM、466×466 圆屏、FT3168 触摸）。
+本节是**参考实现**的一条路径，绑定一块具体的板：LilyGO T-Display S3 AMOLED 1.43（ESP32-S3R8、8 MB PSRAM、466×466 圆屏、FT3168 触摸）。换成别的芯片或只做经典蓝牙，协议层完全一样，需要改的是 [01-transport.md](../spec/01-transport.md) 里选哪个 Bearer 与 [watch/docs/reference-architecture.md](../../watch/docs/reference-architecture.md) 里的任务划分。
 
 ### 环境
 
@@ -241,13 +241,20 @@ I (1120) WP_VIDEO: frame 0 presented (te=1)
 
 ### 用 PC 当"旁观者"验证协议
 
-在手机上抓 HCI 日志（Android 的"蓝牙 HCI 信息收集日志"），导出 btsnoop，然后：
+Android 的 `btsnoop_hci.log` 里**没有** GATT 通知的 ATT 负载——它只记录 HCI 命令与事件，解不出协议帧。要拿到可分析的字节，走这两条：
+
+| 方式 | 怎么做 | 产出 |
+| :--- | :--- | :--- |
+| 抓包 | nRF Connect 的 BLE 抓包；或手机 HCI snoop 配合 `btmon` 重建 L2CAP | `.pcap` |
+| 自己 dump | 在手机 SDK 或手表固件里把协议层字节原样写到文件 | `.bin` / `.hex` |
+
+然后：
 
 ```pwsh
-python tools/analyze_btsnoop.py path\to\btsnoop_hci.log
+python tools/analyze_stream.py capture.pcap
 ```
 
-`tools/analyze_btsnoop.py` 会提取所有 BLE 写/通知的字节流，喂给 `StreamParser`，输出：
+输出：
 
 - 帧类型直方图
 - 有没有 CRC 错误、有没有发生重同步
@@ -272,7 +279,7 @@ python tools/analyze_btsnoop.py path\to\btsnoop_hci.log
 按可能性排序：
 
 1. **带宽不足**：看 `PipelineStats.bytesPerSecond` 是否超过 BLE 实际吞吐。降质量或降帧率。
-2. **off-by-20 分块错误**：表现为画面下半部灰掉或解码失败。用 `analyze_btsnoop.py` 检查 `chunk_total`。
+2. **off-by-20 分块错误**：表现为画面下半部灰掉或解码失败。用 `analyze_stream.py` 检查 `chunk_total`。
 3. **Credit 没有归还**：看 `FEEDBACK.credits` 是否长期贴 0。检查手表是否在**解码完成后**才归还 Credit（而不是收到块就归还）。
 4. **双缓冲没生效**：表现为撕裂。确认 PSRAM 已启用、`tearing_mode` 与 TE 引脚配置正确。
 5. **Core 绑定错误**：解码和 BLE 抢同一个核。检查任务创建时的 `xTaskCreatePinnedToCore` 参数。

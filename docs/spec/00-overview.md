@@ -45,23 +45,25 @@
 | 码率 | Profile A: 150–300 KB/s；Profile B: 200–800 kbps |
 | 首帧时间 | < 500 ms（连接建立到首帧显示） |
 | 内存占用（手表） | 帧头层承载缓冲 `2 × (16 + max_chunk_bytes)` = **520 字节**；视频层整帧重组缓冲由 `max_frame_bytes` 决定（参考值 < 2 MB）；1 帧解码缓冲 |
-| 芯片要求（Profile A） | 任意带 JPEG 硬解 + BLE 的 MCU |
+| 芯片要求（Profile A） | 任意带 JPEG 硬解 + BLE 或 BR/EDR 的 MCU |
 | 协议开销 | 每帧 ≤ 0.3%（不含传输层分片头） |
 
 ### 为什么是这两个 Profile
 
 | Profile | 适用芯片 | 编码 | 手表端解码 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **A: MJPEG** | ESP32-S3 等低端 MCU | 手机端按需压 JPEG | JPEG 硬解，可到 10–15 fps | **参考实现首选** |
-| **B: H.264** | 带硬解的中高端芯片 | MediaCodec Baseline | 硬解，15–30 fps | 带宽友好，但 ESP32-S3 只能软解、性能不足 |
+| **A: MJPEG** | 任意带 JPEG 硬解的低端 MCU | 手机端按需压 JPEG | JPEG 硬解，可到 10–15 fps | **基线，必须支持** |
+| **B: H.264** | 带 H.264 硬解的中高端芯片 | MediaCodec Baseline | 硬解，15–30 fps | 带宽友好；软解芯片（如 ESP32-S3）达不到 10 fps，协商时不会被选中 |
 
-ESP32-S3 **没有经典蓝牙（A2DP）**，H.264 只能软解。因此参考实现优先 Profile A，Profile B 面向炬芯 ATS3089 等带硬解和经典蓝牙的芯片。
+A 是基线：不需要 H.264 硬解，随机丢帧只影响那一帧。B 的价值在带宽（200–800 kbps 对 1.2–2.4 Mbps），代价是必须硬解，且丢帧要等下一个 IDR 才能恢复。
+
+参考实现（一块 ESP32-S3 板）只能软解 H.264，所以它落在 A 上——这是那一块板的约束，不是协议的偏向。带 H.264 硬解的芯片（如 ATS3089）应当用 B。
 
 ## 3. 文档地图
 
 | 文档 | 内容 | 读者 |
 | :--- | :--- | :--- |
-| [01-transport.md](01-transport.md) | BLE GATT / L2CAP CoC / Wi-Fi 三种承载，MTU 协商，分片与流控 | 传输层实现者 |
+| [01-transport.md](01-transport.md) | BLE GATT / L2CAP CoC / Wi-Fi / 经典蓝牙 SPP 四种承载，MTU 协商，分片与流控 | 传输层实现者 |
 | [02-wire-format.md](02-wire-format.md) | 16 字节帧头、CRC-16、完整的帧类型表 | **所有人（先读这个）** |
 | [03-session.md](03-session.md) | 握手、能力协商、状态机、心跳、错误与重连 | 会话层实现者 |
 | [04-video.md](04-video.md) | 视频帧头、分块、Credit 流控、丢帧策略、码率自适应 | 编解码实现者 |
@@ -99,13 +101,13 @@ ESP32-S3 **没有经典蓝牙（A2DP）**，H.264 只能软解。因此参考实
 - **必须（MUST）** 实现 [03-session.md](03-session.md) 的握手与能力协商，并在协商失败时干净地断开。
 - **必须（MUST）** 支持 [04-video.md](04-video.md) 的 Profile A（MJPEG）。
 - **应当（SHOULD）** 支持 [05-input.md](05-input.md) 的触控回传（纯显示设备可豁免，须在能力位中声明）。
-- **可以（MAY）** 支持 Profile B、Wi-Fi 承载、音频旁路。
+- **可以（MAY）** 支持 Profile B、Wi-Fi 承载、经典蓝牙承载（[01-transport.md §5](01-transport.md)）、音频旁路。
 
 ## 6. 参考实现
 
 | 端 | 硬件 / 软件 |
 | :--- | :--- |
-| 手表端 | LilyGO T-Display S3 AMOLED 1.43（ESP32-S3R8, 8 MB PSRAM, 466×466 圆屏, FT3168 触摸） |
+| 手表端（示例） | LilyGO T-Display S3 AMOLED 1.43（ESP32-S3R8, 8 MB PSRAM, 466×466 圆屏, FT3168 触摸）——一块具体的板子，协议不依赖它的任何特性 |
 | 手表端协议栈 | `watch/` — ESP-IDF + LVGL，双核分工 |
 | 手机端 | `android/` — Kotlin，`com.watchplay.sdk` |
 | 工具 | `tools/` — Python 协议参考实现与抓包分析器 |

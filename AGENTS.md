@@ -1,6 +1,6 @@
 # AGENTS.md
 
-WatchPlay is a phone → watch mirroring protocol: the phone renders a watch UI in HTML + CSS, captures it from a WebView, encodes it as MJPEG/H.264 and sends it over BLE; touches travel back. This repository holds the specification and the reference implementations.
+WatchPlay is a phone → watch mirroring protocol: the phone renders a watch UI in HTML + CSS, captures it from a WebView, encodes it as MJPEG/H.264 and sends it over BLE, classic Bluetooth or Wi-Fi; touches travel back. This repository holds the specification and the reference implementations.
 
 ## The spec wins
 
@@ -18,14 +18,14 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 | `tools/` | Executable reference implementation, tests, linters (stdlib only) |
 | `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
 | `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app |
-| `watch/docs/` | Watch-side reference architecture. Documentation only, no firmware source |
+| `watch/docs/` | Watch-side reference architecture for one board. Documentation only, no firmware source |
 
 ## Commands
 
 Python 3.10+, no third-party packages:
 
 ```pwsh
-python tools/test_protocol.py        # 46 tests; also runs the doc link check
+python tools/test_protocol.py        # 48 tests; also runs the doc link check
 python tools/gen_traces.py --check   # committed traces match the generator
 python tools/lint_scenes.py          # examples/watch-ui obeys the rendering spec
 python tools/check_doc_links.py      # relative links and anchors
@@ -53,6 +53,7 @@ Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test`, JDK 17 + 
 - Commit bodies: one or two sentences on what changed and why, plus whatever a reviewer would otherwise trip over. Not a per-file list.
 - Replace stale prose instead of annotating it. A "was X, now Y" note belongs in `99-changelog.md` and nowhere else.
 - Tables over paragraphs; numbers over adjectives.
+- The reference hardware is an example, never the subject. Do not write "the watch advertises" when you mean BLE, or "ESP32-S3 can't" when you mean a capability the protocol does not require. Name the bearer or the capability; put board-specific facts under "reference implementation", and keep them out of conformance requirements.
 
 ## Pitfalls
 

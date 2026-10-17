@@ -71,7 +71,7 @@
 | 2 | `0x0004` | `HAS_PSRAM` | 有外部 PSRAM（影响可接受的帧缓冲数） |
 | 3 | `0x0008` | `SUPPORTS_L2CAP_COC` | 支持 L2CAP CoC 承载 |
 | 4 | `0x0010` | `SUPPORTS_WIFI` | 支持 Wi-Fi 承载 |
-| 5 | `0x0020` | `SUPPORTS_A2DP` | 支持经典蓝牙 A2DP（ESP32-S3 **不支持**，恒为 0） |
+| 5 | `0x0020` | `SUPPORTS_A2DP` | 支持经典蓝牙 A2DP。由设备能力决定；参考实现（ESP32-S3）无经典蓝牙，为 0 |
 | 6 | `0x0040` | `IS_BATTERY_POWERED` | 电池供电，手机应更保守地推流 |
 | 7–15 | — | *保留* | 必须为 0 |
 
@@ -125,7 +125,7 @@ TLV 单元： type(u8) | len(u8) | value(len 字节)    ← 全部小端
 | 1 | 1 | `fw_major` | u8 | 固件主版本 |
 | 2 | 1 | `fw_minor` | u8 | |
 | 3 | 1 | `fw_patch` | u8 | |
-| 4 | 8 | `chip_id` | u8[8] | ESP32-S3 的 MAC，小端 |
+| 4 | 8 | `chip_id` | u8[8] | 设备唯一 ID，小端；参考实现用 ESP32-S3 的 MAC |
 | 12 | 4 | `build_id` | u32 | 固件构建号，用于匹配符号表 |
 
 ### 3.3 `DISPLAY`（16 字节）
@@ -168,7 +168,7 @@ ESP32-S3 的 AMOLED 面板驱动（如 CO5300/SH8601）通常通过 QSPI 接收 
 | 4 | 2 | `max_bitrate_kbps` | u16 | 建议上限 |
 | 6 | 2 | `max_width` | u16 | 解码器最大宽度，`0`=不限 |
 
-> **ESP32-S3 的现实**：`hardware_decode = 0`，且 `esp_h264` 软解在 466×466 上通常无法超过 8–10 fps。因此手表 **应当（SHOULD）** 上报极保守的 `max_fps`（如 `8`），让手机的 `Negotiator` 自然地退回到 Profile A。
+> **软解设备的典型值**（参考实现）：`hardware_decode = 0`，`esp_h264` 在 466×466 上通常不超过 8–10 fps。软解实现 **应当（SHOULD）** 上报保守的 `max_fps`（如 `8`），让手机的 `Negotiator` 自然退回 Profile A。
 
 ### 3.6 `INPUT`（4 字节）
 
@@ -188,7 +188,7 @@ ESP32-S3 的 AMOLED 面板驱动（如 CO5300/SH8601）通常通过 QSPI 接收 
 | 2 | 1 | `volume_levels` | u8 | |
 | 3 | 1 | `reserved` | u8 | |
 
-> **ESP32-S3 上报 `path = 0`**。ESP32-S3 只有 BLE，没有经典蓝牙，无法 A2DP。音频由手机本地播放，手表只负责显示与触控。见 [00-overview.md](00-overview.md)。
+> **参考实现上报 `path = 0`**：那块 ESP32-S3 板只有 BLE，无法走 A2DP，音频由手机本地播放，手表只负责显示与触控。带经典蓝牙的设备 **可以（MAY）** 报 `path = 1`，但链路建立流程尚未标准化（见 [07-capabilities.md §5](07-capabilities.md)）。
 
 ### 3.8 `MEMORY`（8 字节）
 
@@ -268,7 +268,7 @@ ESP32-S3 的 AMOLED 面板驱动（如 CO5300/SH8601）通常通过 QSPI 接收 
 > | 承载层单次提交上限 | `bearer_tu = MTU - 3` | ATT 能装下的字节数（3 字节 = Opcode + Handle）。**这不是协议上限。** |
 > | 协议层单块负载上限 | `max_chunk_bytes = MTU - 16` | 让**整个协议帧**（16 字节帧头 + 负载）一次装进一次 ATT 提交，刻意留出 13 字节余量 |
 >
-> 用 `MTU - 3` 当 `max_chunk_bytes` 是常见错误：它会让每个协议帧超出承载单元，从而需要承载层分片（见 [01-transport.md §5](01-transport.md)）。分片本身 **是合法且有定义的**，但默认值下（`max_chunk_bytes = 244`、MTU 247）一个 260 字节的协议帧会被切成 244 + 16 两次提交——每帧多一次 BLE 提交。这是允许的；若想避免，把 `max_chunk_bytes` 降到 **228**（`16 + 228 = 244`，正好一次），代价是分块数约 +7%。两种选择都合规，但 **必须** 把选定值写进 `CAPS_ACK.RESULT.max_chunk_bytes`。
+> 用 `MTU - 3` 当 `max_chunk_bytes` 是常见错误：它会让每个协议帧超出承载单元，从而需要承载层分片（见 [01-transport.md §6](01-transport.md)）。分片本身 **是合法且有定义的**，但默认值下（`max_chunk_bytes = 244`、MTU 247）一个 260 字节的协议帧会被切成 244 + 16 两次提交——每帧多一次 BLE 提交。这是允许的；若想避免，把 `max_chunk_bytes` 降到 **228**（`16 + 228 = 244`，正好一次），代价是分块数约 +7%。两种选择都合规，但 **必须** 把选定值写进 `CAPS_ACK.RESULT.max_chunk_bytes`。
 
 > **MTU 23 的后果（重要）**：`MTU - 16 = 7`，远低于 84 的下限。此时手机 **禁止（MUST NOT）** 把 `max_chunk_bytes` 抬到 84 硬撑——84 字节的负载装不进 20 字节的 ATT 单元，只会退化成大面积分片和不可用的吞吐。正确行为是**协商失败**：
 >
