@@ -195,12 +195,44 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         }
         playlist = tracks
         state = if (tracks.isEmpty()) State.EMPTY else State.READY
-        index = 0
-        tracks.firstOrNull()?.let {
-            trackTitle = it.title
-            trackArtist = it.artist
-            // Art for the track the scene shows before anyone presses play.
-            trackCover = readCover(it)
+        if (tracks.isEmpty()) return
+        // Open on a track that has a picture. A library of downloads has both kinds, and a demo that starts
+        // on one without art looks exactly like a demo whose art is broken.
+        index = firstTrackWithArt(tracks)
+        val first = tracks[index]
+        trackTitle = first.title
+        trackArtist = first.artist
+        Log.i(TAG, "playlist of ${tracks.size} tracks, opening at #$index (${first.title})")
+        trackCover = readCover(first)
+    }
+
+    /**
+     * Index of the first track in the first [ART_PROBE_TRACKS] that carries an embedded picture, else `0`.
+     *
+     * Bounded on purpose: probing runs one `MediaMetadataRetriever` open per track on the music thread, so a
+     * library with no art at all must not turn loading into a multi-second scan.
+     */
+    private fun firstTrackWithArt(tracks: List<Track>): Int {
+        for (position in 0 until minOf(tracks.size, ART_PROBE_TRACKS)) {
+            if (hasEmbeddedPicture(tracks[position])) return position
+        }
+        return 0
+    }
+
+    /** Cheap presence check, without decoding or re-encoding the picture. */
+    private fun hasEmbeddedPicture(track: Track): Boolean {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, track.uri)
+            retriever.embeddedPicture != null
+        } catch (error: Exception) {
+            false
+        } finally {
+            try {
+                retriever.release()
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "cannot release the metadata retriever", error)
+            }
         }
     }
 
@@ -428,6 +460,9 @@ class PhoneMusic(private val context: Context) : DemoMusic {
 
         /** Enough for a demo picker without holding a huge cursor. */
         private const val MAX_TRACKS = 200
+
+        /** How far the playlist scan looks for a track with a picture before giving up. */
+        private const val ART_PROBE_TRACKS = 40
 
         /** Album-art edge in pixels; the scene draws it at ~75 px on a 466 px panel. */
         private const val COVER_PX = 96

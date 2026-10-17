@@ -200,7 +200,7 @@ cd android
 
 封面是真封面，不是渐变。手机按三条路依次找图：曲目内嵌图（`MediaMetadataRetriever.embeddedPicture`）→ 系统媒体库生成的缩略图（`loadThumbnail`）→ 厂商仍保留的 `content://media/external/audio/albumart/<album_id>`。找到后居中裁方、缩到 96×96、质量 80，编成 `data:image/jpeg;base64,…`（实测 2.4 kB）。**必须是 `data:` URI**——场景跑在 `blockNetworkLoads = true` 下，`content://` 与 `http://` 的图会被直接拒掉。手机只在换歌时推一次，场景侧的 `setCover()` 自己去重；三条路都没有图时推空串，场景退回 `conic-gradient` 的黑胶纹（`adb logcat -s WatchPlayMusic` 会写明是哪条路取到的、或者一条都没取到）。
 
-实测一台真机：抽查 12 首，内嵌图 **0** 首、媒体库缩略图 **0** 首，`content://media/external/audio/albumart` 端点已返回错误——下载/转码来的歌大多没有图，此时就是黑胶纹。**按标题/歌手去网上查封面不在协议范围内**，接不接是宿主 App 的决定：那会把一个本地投屏库变成需要外部服务的库。
+实测一台真机：可播曲目 72 首，其中 **7 首**带内嵌图；其余是下载/转码来的歌，三条路都取不到图，于是保持黑胶纹。所以 Demo 打开时会**从有封面的那首开始**（最多向后探 40 首，找不到就回到第一首）——否则默认打开的那首多半没图，看起来就像封面功能坏了。**按标题/歌手去网上查封面不在协议范围内**：那会把一个本地投屏库变成需要外部服务的库，接不接是宿主 App 的决定。
 
 音频**不上手表**：BLE 没有 A2DP 通路，`00-overview.md` §6 也是这么定的——手表只是遥控器。
 
