@@ -58,3 +58,13 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     testImplementation(libs.junit)
 }
+
+// `CommittedTracesTest` parses the trace files that `tools/gen_traces.py` writes, so the Python
+// reference implementation and this SDK are checked against the *same* bytes instead of against each
+// other's assumptions. Reading them in place keeps the generator the only writer.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty(
+        "watchplay.traces",
+        rootProject.projectDir.parentFile.resolve("examples/protocol-traces").absolutePath,
+    )
+}

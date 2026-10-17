@@ -47,4 +47,17 @@ class Crc16Test {
         header[15] = 0x34
         assertEquals(withoutCrcField, FrameCodec.computeHeaderCrc(header))
     }
+
+    @Test
+    fun `the spec's worked example checksums to 0xF55D`() {
+        // `02-wire-format.md` §1.2: the first chunk of the 466x466 trace — VIDEO, seq 42, 244 bytes.
+        // The expected value is the one printed in the spec's byte table, and the one
+        // `tools/gen_traces.py` writes into the committed trace.
+        val header = byteArrayOf(
+            0x57, 0x50, 0x01, 0x05, 0x18, 0x00, 0x10, 0x00,
+            0x2A, 0x00, 0x00, 0x00, 0xF4.toByte(), 0x00, 0x00, 0x00,
+        )
+
+        assertEquals(0xF55D, FrameCodec.computeHeaderCrc(header))
+    }
 }

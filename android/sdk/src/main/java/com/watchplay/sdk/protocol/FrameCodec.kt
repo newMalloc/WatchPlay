@@ -75,8 +75,16 @@ object FrameCodec {
     /** Offset of the `hdr_crc` field. */
     const val OFFSET_HEADER_CRC: Int = 14
 
-    /** Number of header bytes covered by the checksum: offsets `0..13`. */
-    const val CRC_INPUT_LENGTH: Int = 14
+    /**
+     * Number of header bytes fed to the checksum: the whole 16-byte header.
+     *
+     * `02-wire-format.md` §2 defines the input as a 16-byte header in which offsets 14–15 read as
+     * `0x00 0x00`, **not** the 14 bytes before the field. The distinction is not cosmetic: CRC-16 keeps
+     * clocking the register for as long as bytes are supplied, so appending two zero bytes changes the
+     * result. A 14-byte computation yields a checksum that `tools/watchplay_proto.py`, the committed
+     * traces and the worked example in §1.2 all reject.
+     */
+    const val CRC_INPUT_LENGTH: Int = HEADER_SIZE
 
     /**
      * Parsed frame header, as returned by [decodeHeader] and [tryDecode].
@@ -165,16 +173,17 @@ object FrameCodec {
     }
 
     /**
-     * Computes `hdr_crc` over header bytes `0..13`.
+     * Computes `hdr_crc` over the 16-byte header with the checksum field itself read as `0x00 0x00`.
      *
-     * The specification defines the range as "offsets 0–13, with offsets 14–15 treated as zero", so
-     * this method copies the first 14 bytes into a scratch buffer rather than requiring the caller to
-     * have zeroed the CRC field. It is therefore safe to call on a fully-formed header.
+     * The scratch copy keeps the caller's array untouched, so this is safe to call on a fully formed
+     * header and on the send path where the CRC slot is about to be filled in.
      */
     fun computeHeaderCrc(headerBytes: ByteArray, offset: Int = 0): Int {
         LittleEndian.requireRange(headerBytes, offset, HEADER_SIZE)
-        val scratch = ByteArray(CRC_INPUT_LENGTH)
-        headerBytes.copyInto(scratch, destinationOffset = 0, startIndex = offset, endIndex = offset + CRC_INPUT_LENGTH)
+        val scratch = ByteArray(HEADER_SIZE)
+        headerBytes.copyInto(scratch, destinationOffset = 0, startIndex = offset, endIndex = offset + HEADER_SIZE)
+        scratch[OFFSET_HEADER_CRC] = 0
+        scratch[OFFSET_HEADER_CRC + 1] = 0
         return Crc16.ccittFalse(scratch, 0, CRC_INPUT_LENGTH)
     }
 

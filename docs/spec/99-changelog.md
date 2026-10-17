@@ -27,23 +27,24 @@
 
 ### 起草期间已修正的错误（保留记录，避免重犯）
 
-协议在起草过程中发现并修正了六处会导致实现互不兼容的错误。记录在此是因为这些错误很容易在实现时被"重新发明"：
+协议在起草过程中发现并修正了七处会导致实现互不兼容的错误。记录在此是因为这些错误很容易在实现时被"重新发明"：
 
 | # | 错误 | 后果 | 修正 |
 | :--- | :--- | :--- | :--- |
 | 1 | 分块数按 `ceil(frame_bytes / max_chunk_bytes)` 计算 | 8123 字节 @ 244 得 34 块而非 37 块；接收端在第 34 块就认为帧结束，解出被截断的 JPEG | 改为 `ceil(frame_bytes / (max_chunk_bytes - 20))`，因为 `max_chunk_bytes` 限制的是**含 20 字节视频子头的 `payload_len`**。见 [02-wire-format.md §8](02-wire-format.md)、[04-video.md §3.1](04-video.md) |
-| 2 | 帧头校验写成 **CRC32** | 帧头定长 16 字节装不下 u32 校验：`payload_len` 用 u16 且 CRC 用 u16 才能刚好对齐 | 统一为 **CRC-16/CCITT-FALSE**（u16，仅覆盖偏移 0–13）。见 [02-wire-format.md §2](02-wire-format.md) |
+| 2 | 帧头校验写成 **CRC32** | 帧头定长 16 字节装不下 u32 校验：`payload_len` 用 u16 且 CRC 用 u16 才能刚好对齐 | 统一为 **CRC-16/CCITT-FALSE**（u16，覆盖 16 字节帧头，偏移 14–15 置零）。见 [02-wire-format.md §2](02-wire-format.md) |
 | 3 | `00-overview.md` 在别处仍写 "CRC32"，且把"传输缓冲 < 2 MB"含混描述 | 两处描述互相矛盾，实现者会二选一从而选错 | 以 [02-wire-format.md](02-wire-format.md) 为唯一权威；缓冲区改称"帧头层承载缓冲 520 字节"与"视频层整帧重组缓冲"两个独立概念 |
 | 4 | `max_chunk_bytes` 一度被写成 `MTU − 3`（即 ATT 可用负载），与"协议帧需一次装进一次提交"的目标不符 | 两者混用会让每个协议帧超出承载单元从而被分片，或在 MTU 23 时算出 7 却仍硬撑到 84 | 明确 `max_chunk_bytes = MTU − 16`（刻意留 13 字节余量）。分片本身合法但有代价；**MTU < 100 时协商必须失败**（`BANDWIDTH_INSUFFICIENT`）而非静默降级。见 [03-session.md §4.2](03-session.md)、[01-transport.md §5](01-transport.md) |
 | 5 | [01-transport.md](01-transport.md) 起草时以初始 Credit = 32 为默认，与 [03-session.md §4](03-session.md) 的 `initial_credits = 64` 冲突 | 两处给出不同窗口，手表与手机会对不上 | 统一为 **64**，并以 `CAPS_ACK.RESULT.initial_credits` 为唯一权威来源；`FEEDBACK.credits` 明确为**绝对值**而非增量 |
 | 6 | `FEEDBACK` 被标为 **20 字节**，但其字段表本身是 22 字节（偏移 18 处还有一个 u32 `last_frame_id`） | 20 字节的缓冲会在写入 `last_frame_id` 时越界；对端按 20 解析会读到截断的字段 | 以**字段表为准**定为 **22 字节**。接收方 **应当** 兼容 20 字节（视 `last_frame_id` 为 `0xFFFFFFFF`），发送方 **必须** 发 22 字节。见 [04-video.md §4.2](04-video.md) |
+| 7 | `hdr_crc` 的计算范围写成"偏移 0–13（共 14 字节）"，与同节伪代码 `crc16(hdr[:14] + b"\x00\x00")` 和 §1.2 示例的 `0xF55D` 自相矛盾 | 按 14 字节计算得 `0x7D5D`，与示例、trace、`tools/watchplay_proto.py` 全部对不上；Kotlin SDK 因此发出被一致性实现判为坏帧的字节（`CommittedTracesTest` 抓到的正是这一条） | 明确为**输入 16 字节、偏移 14–15 取 `0x00 0x00`**。线上字节不变，示例与 trace 本来就是对的，变的是那句散文。见 [02-wire-format.md §2](02-wire-format.md) |
 
 **给实现者的提醒**：以上第 1 条是本协议最容易犯的 off-by-20 错误。`tools/analyze_stream.py` 内置了自动诊断——它会从抓到的字节流反推 `chunk_total` 是否自相矛盾，并直接指出犯的是哪个公式。
 
 ### 协议核心
 
 - 定义 16 字节定长帧头：`magic`/`version`/`type`/`flags`/`hdr_len`/`seq`/`payload_len`/`hdr_crc`
-- 校验算法选定 **CRC-16/CCITT-FALSE**，仅覆盖帧头（偏移 0–13）
+- 校验算法选定 **CRC-16/CCITT-FALSE**，覆盖 16 字节帧头（偏移 14–15 置零）
 - `seq` 使用 RFC 1982 序列号算术；`seq = 0` 保留为"未初始化"
 - `hdr_len > 16` 时跳过未知扩展区，为帧头扩展留出前向兼容路径
 - 13 个标准 `FrameType`（`0x01`–`0x0C` 已分配，`0x06 VIDEO_END` 保留未用），并划分保留区（`0x0D`–`0x7F`）与厂商区（`0x80`–`0xFF`）
