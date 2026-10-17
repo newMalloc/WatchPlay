@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Palette of the demo app. The values mirror the watch scene's own custom properties
+  (`examples/watch-ui/demo-scene.html`), so the phone chrome and the mirrored picture agree.
+-->
+<resources>
+    <color name="wp_bg">#080b11</color>
+    <color name="wp_card">#0d131c</color>
+    <color name="wp_card_soft">#101722</color>
+    <color name="wp_line">#1e2836</color>
+    <color name="wp_fg">#eef3ff</color>
+    <color name="wp_dim">#8a93a8</color>
+    <color name="wp_accent">#4ac6ff</color>
+    <color name="wp_accent_deep">#12384a</color>
+    <color name="wp_ok">#6ee7a8</color>
+</resources>

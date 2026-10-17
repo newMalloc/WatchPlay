@@ -1,19 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">WatchPlay demo</string>
+    <string name="app_title">WatchPlay</string>
+    <string name="app_tagline">phone → watch · 466×466 · MJPEG</string>
+
     <string name="start_mirroring">Start mirroring</string>
     <string name="stop_mirroring">Stop mirroring</string>
-    <string name="connect_watch">Connect to watch (BLE)</string>
+    <string name="connect_watch">Connect to watch</string>
     <string name="scanning_watches">Scanning…</string>
     <string name="no_watches">No WatchPlay sink found. Is the sink app advertising?</string>
     <string name="pick_watch">Pick a watch sink</string>
     <string name="bluetooth_needed">Bluetooth permissions are required to scan for a watch.</string>
     <string name="bluetooth_unavailable">Bluetooth is off or unavailable on this device.</string>
-    <string name="stats_placeholder">Pipeline stats appear here once mirroring starts.</string>
+
+    <string name="chip_idle">IDLE</string>
+    <string name="chip_dash">—</string>
+    <string name="chip_fps">%1$.1f fps</string>
+    <string name="chip_latency">%1$d ms</string>
+    <string name="chip_credit">%1$d cr</string>
+    <string name="chip_no_link">no link</string>
+
+    <string name="frame_preview_title">Frame to send</string>
     <string name="frame_preview">Frame preview</string>
-    <string name="frame_preview_full">Enlarge frame</string>
-    <string name="frame_label">sent #%1$d · %2$d×%3$d · %4$s · %5$d chunks</string>
-    <string name="frame_label_empty">waiting for the first encoded frame…</string>
-    <string name="frame_black">capture looks BLACK — PixelCopy may not see the WebView on this device</string>
+    <string name="frame_enlarge">Enlarge</string>
+    <string name="frame_label_empty">waiting for the first frame…</string>
+    <string name="frame_detail_empty">start mirroring to see what the watch will receive</string>
+    <string name="frame_label">#%1$d · %2$d×%3$d</string>
+    <string name="frame_detail">%1$s · %2$d chunks</string>
+    <string name="frame_black">CAPTURE IS BLACK — PixelCopy cannot see the WebView here</string>
     <string name="frame_none">No encoded frame yet — start mirroring first.</string>
+
+    <string name="music_play">Play music</string>
+    <string name="music_pause">Pause music</string>
+    <string name="music_permission">Allow music access to play a track</string>
+    <string name="music_missing">No music found on this phone</string>
+
+    <string name="details_title">Pipeline details</string>
+    <string name="details_show">Show</string>
+    <string name="details_hide">Hide</string>
+    <string name="stats_placeholder">Start mirroring to see the pipeline at work.</string>
 </resources>

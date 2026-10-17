@@ -39,7 +39,7 @@ python tools/render_diagrams.py      # the only script that needs the network
 ```
 
 Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (122 JVM tests) and
-`./gradlew :demo:test` (9 more, the demo app's data contract), plus `:demo:assembleDebug` and
+`./gradlew :demo:test` (12 more, the demo app's data contract), plus `:demo:assembleDebug` and
 `:sink:assembleDebug` for the two apps. JDK 17 + SDK 34.
 
 ## Changes that must travel together

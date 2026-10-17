@@ -169,17 +169,32 @@ cd android
 
 ![Demo 运行中](demo-frame-preview.png)
 
-- 上方是 466×466 的 [`demo-scene.html`](../../examples/watch-ui/demo-scene.html)，和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
-- 它下面那行的小图是**刚编码完、即将发给手表的那一帧**：把 JPEG 解回来画出来，就是手表会显示的样子；右侧标签写帧号、尺寸、字节数、分块数（上面这张是 `sent #92 · 466×466 · 10 kB · 47 chunks`）。
-- **Enlarge frame** 用对话框按 1:1 显示某一帧。对话框是独立窗口，所以它不会落进捕获区域——任何盖在场景上的东西都会被 `PixelCopy` 一起抓走，预览就会拍到它自己。
+- 卡片里是 466×466 的 [`demo-scene.html`](../../examples/watch-ui/demo-scene.html)，和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
+- 四个 chip 是实时数字：会话状态（`LIVE`）、`fps`、`latency`、剩余 credit。
+- **Frame to send** 那一行的小图是**刚编码完、即将发给手表的那一帧**：把 JPEG 解回来画出来，就是手表会显示的样子；右侧写着帧号、尺寸、字节数、分块数（上图是 `#111 · 466×466` / `9 kB · 46 chunks`）。
+- **Enlarge** 用对话框按 1:1 显示某一帧。对话框是独立窗口，所以它不会落进捕获区域——任何盖在场景上的东西都会被 `PixelCopy` 一起抓走，预览就会拍到它自己。
 - 如果这一帧几乎全黑，标签直接显示 `capture looks BLACK`——`PixelCopy` 在某些机型上读不到 WebView 的合成层，这就是它出问题时的样子，不用等接上手表才发现。
 - 表盘上显示的是**这台手机**的时间和电量：`DemoSceneApp.pollUpdate` 每秒把它们推给场景，走的是 `MirrorApp` → `SceneUpdate` → `window.watchplay.render()` 这条路，不是场景自己算的。
 - 导航页是一条 2.4 公里的脚本路线（左转 → 直行 → 右转 → 到达），距离每秒倒数，走完一轮重来。
-- 下方的统计文本持续刷新：`fps`、`bytes/s`、`dropped`、`latency`，外加 `scene:`（场景就绪后的面板参数）、`sent frame:`（最近一帧的帧号/尺寸/字节数）与 `paint requests:`（每秒一次数据推送触发的合成完成回调计数，随推送增长即说明 `applyUpdate` 生效）
+- **Pipeline details** 折叠着完整统计（协商参数、pipeline 汇总、脚本手表收到的帧数与 credit）。
 
 **这一步能验证**：WebView 渲染是否正常、`PixelCopy` 捕获是否出图（看缩略图而不是猜）、编码器是否初始化成功、分块与 Credit 逻辑是否自洽、`applyUpdate` 是否真的把数据送进了 DOM。**不能验证**：真实蓝牙吞吐与手表解码性能。
 
-> 一台 Android 手机（1080×2376，density 480）上的实测数字：466×466 MJPEG q70 约 10 kB、45–61 块、`latency` 8–12 ms、7.5 fps（CPU JPEG 编码的开销，不是链路的）。窗口给 256 块，`frames sent` 与 `frames reassembled` 一致。
+> 一台 Android 手机（1080×2376，density 480）上的实测数字：466×466 MJPEG q70 约 9–14 kB、45–67 块、`latency` 5–13 ms、6–8 fps（CPU JPEG 编码的开销，不是链路的）。窗口给 256 块，`frames sent` 与 `frames reassembled` 一致。
+
+### 音乐是真的在播
+
+![音乐页](demo-music.png)
+
+点 **Play music** 后 Demo 播的是**这台手机自己的音乐库**（`MediaStore` + `MediaPlayer`，没有内置音频文件）：`Play music` 第一次会要 `READ_MEDIA_AUDIO`（Android 12 及更早是 `READ_EXTERNAL_STORAGE`），之后就可以播/暂停/上一首/下一首。
+
+| 谁 | 做了什么 |
+| :--- | :--- |
+| 手机 App | 读曲库标签（标题、歌手）、持有 `MediaPlayer`、每 250 ms 采样播放位置，每秒把 `title`/`artist`/`playing`/`progress` 推给场景 |
+| 场景 | 只画：标题一行截断、播放/暂停字形、进度条宽度 = `progress × 100%`。它自己不算时间也不做动画 |
+| 播控 | 点手表上的三键 → `TOUCH` → 原生 `MotionEvent` → 场景的 click → `window.watchplayHost.onControl("play")` → App 调 `MediaPlayer`。命中判定留在场景里（7 mm 目标在那儿），App 不复制几何 |
+
+音频**不上手表**：BLE 没有 A2DP 通路，`00-overview.md` §6 也是这么定的——手表只是遥控器。
 
 ### 用第二台 Android 设备当手表（真实 BLE 链路）
 

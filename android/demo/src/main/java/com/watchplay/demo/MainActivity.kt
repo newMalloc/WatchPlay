@@ -1,5 +1,6 @@
 package com.watchplay.demo
 
+import android.Manifest
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,6 +11,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -19,7 +21,6 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.webkit.WebView
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -85,12 +86,22 @@ class MainActivity :
     private lateinit var sceneView: WebView
     private lateinit var render: WebViewRenderModule
     private lateinit var sceneApp: DemoSceneApp
+    private lateinit var music: PhoneMusic
     private lateinit var statsView: TextView
-    private lateinit var toggleButton: Button
-    private lateinit var watchButton: Button
-    private lateinit var frameButton: Button
+    private lateinit var toggleButton: TextView
+    private lateinit var watchButton: TextView
+    private lateinit var frameButton: TextView
+    private lateinit var musicButton: TextView
+    private lateinit var detailsToggle: TextView
     private lateinit var previewView: ImageView
     private lateinit var previewLabel: TextView
+    private lateinit var previewDetail: TextView
+    private lateinit var chipSession: TextView
+    private lateinit var chipFps: TextView
+    private lateinit var chipLatency: TextView
+    private lateinit var chipCredit: TextView
+
+    private var detailsVisible = false
 
     private var client: WatchPlayClient? = null
     private var watchStub: DemoWatchStub? = null
@@ -111,7 +122,11 @@ class MainActivity :
     @Volatile
     private var lastFrame: PipelineFrame? = null
 
+    /** Written by the SDK's control thread, read by the UI thread: the visibility must be explicit. */
+    @Volatile
     private var lastStats: PipelineStats = PipelineStats()
+
+    @Volatile
     private var lastState: SessionState = SessionState.IDLE
     private var lastError: String? = null
     private var sceneStatus: String = "not loaded"
@@ -132,23 +147,40 @@ class MainActivity :
         toggleButton = findViewById(R.id.toggle)
         watchButton = findViewById(R.id.watch)
         frameButton = findViewById(R.id.frame_toggle)
+        musicButton = findViewById(R.id.music_toggle)
+        detailsToggle = findViewById(R.id.details_toggle)
         previewView = findViewById(R.id.frame_preview)
         previewLabel = findViewById(R.id.frame_label)
+        previewDetail = findViewById(R.id.frame_detail)
+        chipSession = findViewById(R.id.chip_session)
+        chipFps = findViewById(R.id.chip_fps)
+        chipLatency = findViewById(R.id.chip_latency)
+        chipCredit = findViewById(R.id.chip_credit)
         scanner = BleWatchScanner(this)
+        music = PhoneMusic(this)
 
         sceneView = createSceneWebView()
         render = WebViewRenderModule(DEMO_LAYOUT, this)
         render.attach(sceneView)
+        // The scene turns a click on its controls into a command; see SceneBridge for why the touch path
+        // itself stays native.
+        sceneView.addJavascriptInterface(
+            SceneBridge { control ->
+                handler.post {
+                    sceneApp.control(control)
+                    syncMusicButton()
+                }
+            },
+            SCENE_BRIDGE,
+        )
         findViewById<FrameLayout>(R.id.scene_container).addView(
             sceneView,
-            // Index 0: the preview sits above the scene, which is what "expanded" shows instead of it.
-            0,
             // Laid out at the panel's pixel size, so the captured bitmap and the encoded frame are the
             // size the watch negotiated: a 466 px WebView under a density-160 context is a 466 CSS px
             // viewport, and `1vmin` in the scene is then exactly 1% of the panel (06-rendering.md §3.2).
             FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER),
         )
-        sceneApp = DemoSceneApp(readSceneHtml())
+        sceneApp = DemoSceneApp(readSceneHtml(), music)
         registerBattery()
 
         toggleButton.setOnClickListener {
@@ -156,6 +188,20 @@ class MainActivity :
         }
         watchButton.setOnClickListener { connectToWatch() }
         frameButton.setOnClickListener { showFrameDialog() }
+        detailsToggle.setOnClickListener { toggleDetails() }
+        musicButton.setOnClickListener {
+            if (ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED) {
+                startMusic()
+            } else {
+                requestPermissions(arrayOf(audioPermission()), REQUEST_AUDIO)
+            }
+        }
+        syncMusicButton()
+        // Show the real track on the watch before anyone presses play; the permission prompt itself stays
+        // on the button, so a first launch never asks for the library unprompted.
+        if (ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED) {
+            music.load()
+        }
 
         // Start on the loopback link: the point of this APK is to show the picture that would be sent,
         // and that needs no second device and no permissions.
@@ -166,6 +212,7 @@ class MainActivity :
         handler.removeCallbacks(statsTicker)
         unregisterReceiver(batteryReceiver)
         previewExecutor.shutdownNow()
+        music.release()
         scanner.stop()
         stopMirroring()
         // The module owns the WebView; it destroys it on the handler.
@@ -175,12 +222,71 @@ class MainActivity :
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_AUDIO) {
+            if (ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED) {
+                startMusic()
+            } else {
+                Toast.makeText(this, R.string.music_permission, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         if (requestCode != REQUEST_BLUETOOTH) return
         if (scanner.hasPermissions()) {
             scanForWatches()
         } else {
             Toast.makeText(this, R.string.bluetooth_needed, Toast.LENGTH_LONG).show()
         }
+    }
+
+    // ---------------------------------------------------------------- music
+
+    /** `READ_MEDIA_AUDIO` from API 33 on; before that the audio permission never existed separately. */
+    private fun audioPermission(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+    /**
+     * Loads the library (thread-safe to repeat) and toggles playback.
+     *
+     * Both calls land on the same single-thread executor inside [PhoneMusic], so the load always finishes
+     * before the toggle runs.
+     */
+    private fun startMusic() {
+        music.load()
+        music.toggle()
+        syncMusicButton()
+    }
+
+    private fun syncMusicButton() {
+        if (!::musicButton.isInitialized) return
+        musicButton.text = getString(
+            if (music.isPlaying) R.string.music_pause else R.string.music_play,
+        )
+    }
+
+    private fun toggleDetails() {
+        detailsVisible = !detailsVisible
+        statsView.visibility = if (detailsVisible) View.VISIBLE else View.GONE
+        detailsToggle.setText(if (detailsVisible) R.string.details_hide else R.string.details_show)
+    }
+
+    /**
+     * Short chip label for a session state.
+     *
+     * `STREAMING` does not survive a quarter-width chip at 10sp, and truncating it to `STREAMI…` is worse
+     * than naming the one thing the user cares about. The full state name stays in the details block.
+     */
+    private fun sessionLabel(state: SessionState): String = when (state) {
+        SessionState.STREAMING -> "LIVE"
+        SessionState.DRAINING -> "DRAIN"
+        SessionState.HANDSHAKING -> "HELLO"
+        SessionState.NEGOTIATING -> "NEGO"
+        SessionState.CONNECTING -> "LINK"
+        SessionState.FAILED -> "FAILED"
+        SessionState.IDLE -> "IDLE"
     }
 
     /**
@@ -326,11 +432,13 @@ class MainActivity :
                 previewLabel.text = if (blank) {
                     getString(R.string.frame_black)
                 } else {
+                    getString(R.string.frame_label, frame.frameId, frame.encoded.width, frame.encoded.height)
+                }
+                previewDetail.text = if (blank) {
+                    ""
+                } else {
                     getString(
-                        R.string.frame_label,
-                        frame.frameId,
-                        frame.encoded.width,
-                        frame.encoded.height,
+                        R.string.frame_detail,
                         "${jpeg.size / 1024} kB",
                         frame.chunkTotal,
                     )
@@ -411,14 +519,13 @@ class MainActivity :
         }
         AlertDialog.Builder(this)
             .setTitle(
-                getString(
-                    R.string.frame_label,
-                    frame.frameId,
-                    frame.encoded.width,
-                    frame.encoded.height,
-                    "${frame.encoded.sizeBytes / 1024} kB",
-                    frame.chunkTotal,
-                ),
+                getString(R.string.frame_label, frame.frameId, frame.encoded.width, frame.encoded.height) +
+                    " · " +
+                    getString(
+                        R.string.frame_detail,
+                        "${frame.encoded.sizeBytes / 1024} kB",
+                        frame.chunkTotal,
+                    ),
             )
             .setView(stage)
             .setPositiveButton(android.R.string.ok) { _, _ -> snapshot.recycle() }
@@ -508,6 +615,18 @@ class MainActivity :
     private fun renderStats() {
         val stub = watchStub
         val client = this.client
+        val stats = lastStats
+
+        chipSession.text = sessionLabel(lastState)
+        chipFps.text = if (stats.framesSent > 0) getString(R.string.chip_fps, stats.fps) else getString(R.string.chip_dash)
+        chipLatency.text = if (stats.framesSent > 0) {
+            getString(R.string.chip_latency, stats.averageLatencyMs.toInt())
+        } else {
+            getString(R.string.chip_dash)
+        }
+        chipCredit.text = getString(R.string.chip_credit, client?.stats()?.creditRemaining ?: 0)
+        syncMusicButton()
+
         val text = buildString {
             append("session: ").append(lastState.name).append('\n')
             append("link: ").append(linkLabel).append('\n')
@@ -558,6 +677,12 @@ class MainActivity :
         private const val SCAN_TIMEOUT_MS = 8_000L
 
         private const val REQUEST_BLUETOOTH = 1
+
+        /** Audio-library permission, requested once at start. */
+        private const val REQUEST_AUDIO = 2
+
+        /** Name the scene sees: `window.watchplayHost`. */
+        private const val SCENE_BRIDGE = "watchplayHost"
 
         /** How often the preview decodes a frame; the stream itself runs at 10 fps. */
         private const val PREVIEW_PERIOD_MS = 250L

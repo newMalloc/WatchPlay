@@ -5,8 +5,16 @@
   The demo runs entirely over LoopbackTransport, so it needs no Bluetooth permission of its own; the
   ones merged in from :sdk are simply unused. Nothing here asks for screen-recording access, which is the
   whole point of WatchPlay (the scene is captured from the app's own WebView, never from MediaProjection).
+
+  The audio permissions exist because the music page mirrors the phone's own library: it reads the track
+  tags and drives `MediaPlayer` locally, and nothing leaves the device.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="false"

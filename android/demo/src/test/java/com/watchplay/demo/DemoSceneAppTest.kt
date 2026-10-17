@@ -21,6 +21,8 @@ class DemoSceneAppTest {
     /** 2026-10-17 is a Saturday; the epoch value is only the source of the injected clock. */
     private val fixedWall = 1_792_200_000_000L
 
+    private val ZONE = java.time.ZoneId.of("Asia/Shanghai")
+
     private fun app(wall: Long = fixedWall, battery: Int? = null) =
         DemoSceneApp(
             html = "<html></html>",
@@ -110,11 +112,72 @@ class DemoSceneAppTest {
         assertTrue(update.requestFrameAfterUpdate)
     }
 
+    @Test
+    fun `real playback state is pushed instead of a placeholder`() {
+        val music = FakeMusic(title = "夜航西飞", artist = "林", isPlaying = true, progress = 0.375f)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+
+        val data = app.pollUpdate(1_000L)?.data ?: error("no update")
+
+        assertEquals("\"夜航西飞\"", data["title"])
+        assertEquals("\"林\"", data["artist"])
+        assertEquals("true", data["playing"])
+        assertEquals("0.375", data["progress"])
+    }
+
+    @Test
+    fun `paused playback keeps the track but reports it as stopped`() {
+        val music = FakeMusic(title = "A", artist = "B", isPlaying = false, progress = 0.5f)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+
+        val data = app.pollUpdate(1_000L)?.data ?: error("no update")
+
+        assertEquals("false", data["playing"])
+        assertEquals("\"A\"", data["title"])
+    }
+
+    @Test
+    fun `a control tapped in the scene reaches the player`() {
+        val music = FakeMusic()
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+
+        app.control("play")
+        app.control("next")
+        app.control("prev")
+        app.control("something-else")
+
+        assertEquals(listOf("toggle", "next", "previous"), music.calls)
+    }
+
+    private class FakeMusic(
+        override val title: String = "Track",
+        override val artist: String = "Artist",
+        override val isPlaying: Boolean = false,
+        override val progress: Float = 0f,
+    ) : DemoMusic {
+        val calls = mutableListOf<String>()
+
+        override val available: Boolean = true
+        override val statusText: String = ""
+
+        override fun toggle() {
+            calls += "toggle"
+        }
+
+        override fun next() {
+            calls += "next"
+        }
+
+        override fun previous() {
+            calls += "previous"
+        }
+    }
+
     private fun metresOf(value: String): Int =
         Regex("""(\d+)""").find(value)?.groupValues?.get(1)?.toInt() ?: error("no metres in $value")
 
     private fun expectClock(): String {
-        val time = java.time.Instant.ofEpochMilli(fixedWall).atZone(ZoneId.of("Asia/Shanghai"))
+        val time = java.time.Instant.ofEpochMilli(fixedWall).atZone(ZONE)
         return String.format("\"%02d:%02d\"", time.hour, time.minute)
     }
 }

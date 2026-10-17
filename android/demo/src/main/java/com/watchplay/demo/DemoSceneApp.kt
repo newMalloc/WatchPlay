@@ -38,6 +38,7 @@ import kotlin.math.roundToInt
  */
 class DemoSceneApp(
     private val html: String,
+    private val music: DemoMusic? = null,
     private val wallClock: () -> Long = System::currentTimeMillis,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : MirrorApp {
@@ -78,6 +79,14 @@ class DemoSceneApp(
             "eta" to quoted(guidance.etaMinutes.toString()),
         )
         batteryPercent?.let { data["battery"] = it.toString() }
+        music?.let { player ->
+            // Real playback state: the scene only draws what the phone reports (`00-overview.md` §6, audio
+            // never travels to the watch).
+            data["title"] = quoted(player.title)
+            data["artist"] = quoted(player.artist)
+            data["playing"] = player.isPlaying.toString()
+            data["progress"] = String.format(Locale.ROOT, "%.3f", player.progress)
+        }
 
         return SceneUpdate(
             sceneId = ID,
@@ -90,6 +99,23 @@ class DemoSceneApp(
 
     /** The scene owns its buttons (page switching, play/pause), so the app never claims a touch. */
     override fun onTouch(touch: MappedTouch): Boolean = false
+
+    /**
+     * Drives playback for a control tapped inside the scene.
+     *
+     * Called from the WebView's JavaScript bridge, which is how a tap that reached the *scene* becomes a
+     * media action: `dispatchTouch` gives the WebView a real `MotionEvent`, the scene turns the resulting
+     * click into this call (`05-input.md` §2.4 keeps the touch path native; the command back is app-level).
+     *
+     * @param control `play`, `pause`, `next` or `prev`, as declared by `data-ctl` in the scene.
+     */
+    fun control(control: String) {
+        when (control) {
+            "play", "pause", "toggle" -> music?.toggle()
+            "next" -> music?.next()
+            "prev", "previous" -> music?.previous()
+        }
+    }
 
     override fun onStart(host: MirrorApp.Host) {
         // A fresh start restarts the scripted route, so the demo is repeatable.

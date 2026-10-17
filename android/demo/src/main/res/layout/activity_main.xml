@@ -1,104 +1,231 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  WatchPlay :demo — the mirrored scene, the frame that is about to be sent, and a live stats log.
+  WatchPlay :demo — the mirrored scene, the frame about to be sent, and the numbers behind them.
 
-  The scene lives inside a container rather than being declared as a WebView here, because
-  `06-rendering.md` §3.2 step 1 requires the WebView to be created from a `densityDpi = 160`
-  configuration context so that `1 CSS px == 1 physical px` and therefore `1vmin == 1%` of the shorter
-  side. MainActivity does that programmatically, and it also pins the WebView to the negotiated
-  466x466 so the captured bitmap is what the watch will actually receive.
+  The WebView is created in code (a `densityDpi = 160` context is required, `06-rendering.md` §3.2) and
+  pinned to the negotiated 466x466, so the captured bitmap is exactly what the watch will receive.
 
   Nothing may be drawn over the scene: `PixelCopy` copies the window region under the WebView, so an
-  overlay would end up inside the frame that goes to the watch — the preview would mirror itself.
-  That is why the frame preview sits in its own row below the scene, and enlarging it opens a dialog
-  (a dialog is a separate window surface, so it cannot contaminate the capture either).
+  overlay would end up inside the frame sent to the watch — the preview would mirror itself. The frame
+  preview therefore lives in its own card below the scene, and enlarging it opens a dialog (a dialog is
+  a separate window surface, so it cannot contaminate the capture either).
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="12dp">
-
-    <FrameLayout
-        android:id="@+id/scene_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#05070c" />
+    android:background="@color/wp_bg"
+    android:fillViewport="true"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="24dp">
 
-        <ImageView
-            android:id="@+id/frame_preview"
-            android:layout_width="88dp"
-            android:layout_height="88dp"
-            android:background="#101722"
-            android:contentDescription="@string/frame_preview"
-            android:padding="2dp"
-            android:scaleType="fitCenter"
-            android:visibility="invisible" />
+        <!-- Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_title"
+            android:textColor="@color/wp_fg"
+            android:textSize="22sp"
+            android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/frame_label"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:text="@string/frame_label_empty"
-            android:textColor="#8a93a8"
-            android:textSize="11sp" />
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/toggle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/start_mirroring" />
-
-        <Button
-            android:id="@+id/watch"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="@string/connect_watch" />
-
-        <Button
-            android:id="@+id/frame_toggle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:text="@string/frame_preview_full" />
-
-    </LinearLayout>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="8dp">
-
-        <TextView
-            android:id="@+id/stats"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="@string/stats_placeholder"
+            android:layout_marginTop="2dp"
+            android:text="@string/app_tagline"
+            android:textColor="@color/wp_dim"
             android:textSize="12sp" />
 
-    </ScrollView>
+        <!-- The mirrored scene -->
+        <FrameLayout
+            android:id="@+id/scene_container"
+            android:layout_width="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_card"
+            android:padding="12dp" />
 
-</LinearLayout>
+        <!-- Session state, one chip per number -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/chip_session"
+                style="@style/WatchPlayChip"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:text="@string/chip_idle" />
+
+            <TextView
+                android:id="@+id/chip_fps"
+                style="@style/WatchPlayChip"
+                android:layout_width="0dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/chip_dash" />
+
+            <TextView
+                android:id="@+id/chip_latency"
+                style="@style/WatchPlayChip"
+                android:layout_width="0dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/chip_dash" />
+
+            <TextView
+                android:id="@+id/chip_credit"
+                style="@style/WatchPlayChip"
+                android:layout_width="0dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/chip_dash" />
+        </LinearLayout>
+
+        <!-- The frame that is about to be sent -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card_soft"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <ImageView
+                android:id="@+id/frame_preview"
+                android:layout_width="82dp"
+                android:layout_height="82dp"
+                android:background="@drawable/bg_chip"
+                android:contentDescription="@string/frame_preview_title"
+                android:padding="2dp"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/WatchPlayLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/frame_preview_title" />
+
+                <TextView
+                    android:id="@+id/frame_label"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="@string/frame_label_empty"
+                    android:textColor="@color/wp_fg"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/frame_detail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/frame_detail_empty"
+                    android:textColor="@color/wp_dim"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/frame_toggle"
+                style="@style/WatchPlayButton"
+                android:layout_width="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="62dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text="@string/frame_enlarge" />
+        </LinearLayout>
+
+        <!-- Controls -->
+        <TextView
+            android:id="@+id/toggle"
+            style="@style/WatchPlayButton.Primary"
+            android:layout_width="match_parent"
+            android:layout_marginTop="14dp"
+            android:text="@string/start_mirroring" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/watch"
+                style="@style/WatchPlayButton"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:text="@string/connect_watch" />
+
+            <TextView
+                android:id="@+id/music_toggle"
+                style="@style/WatchPlayButton"
+                android:layout_width="0dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/music_play" />
+        </LinearLayout>
+
+        <!-- Details -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_card_soft"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/WatchPlayLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/details_title" />
+
+                <TextView
+                    android:id="@+id/details_toggle"
+                    style="@style/WatchPlayButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:minWidth="72dp"
+                    android:text="@string/details_show" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/stats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:fontFamily="monospace"
+                android:text="@string/stats_placeholder"
+                android:textColor="@color/wp_dim"
+                android:textSize="11sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

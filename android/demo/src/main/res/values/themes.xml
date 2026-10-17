@@ -1,8 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      The demo deliberately uses a stock AppCompat theme: no extra dependency, no invented parent, and
-      `DayNight` means the demo follows the system theme like any other AppCompat app.
+      A dark theme with no dependency on Material Components: the demo ships AppCompat + core-ktx only,
+      and every surface it needs (cards, buttons, chips) is a shape drawable.
     -->
-    <style name="Theme.WatchPlay.Demo" parent="Theme.AppCompat.DayNight.NoActionBar" />
+    <style name="Theme.WatchPlay.Demo" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/wp_bg</item>
+        <item name="android:statusBarColor">@color/wp_bg</item>
+        <item name="android:navigationBarColor">@color/wp_bg</item>
+        <item name="android:textColorPrimary">@color/wp_fg</item>
+        <item name="android:textColorSecondary">@color/wp_dim</item>
+        <item name="colorAccent">@color/wp_accent</item>
+        <item name="android:colorAccent">@color/wp_accent</item>
+    </style>
+
+    <style name="WatchPlayButton">
+        <item name="android:layout_height">44dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+        <item name="android:textColor">@color/wp_fg</item>
+        <item name="android:background">@drawable/bg_button_secondary</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <style name="WatchPlayButton.Primary">
+        <item name="android:textColor">#dff3ff</item>
+        <item name="android:background">@drawable/bg_button_primary</item>
+    </style>
+
+    <style name="WatchPlayChip">
+        <item name="android:layout_height">28dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">10sp</item>
+        <item name="android:textColor">@color/wp_dim</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:background">@drawable/bg_chip</item>
+    </style>
+
+    <style name="WatchPlayLabel">
+        <item name="android:textSize">10sp</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:textColor">@color/wp_dim</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
 </resources>

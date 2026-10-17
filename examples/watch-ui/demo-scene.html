@@ -114,9 +114,16 @@ html,body{
   width:7vmin; height:7vmin; border-radius:50%;
   background:var(--wp-accent); opacity:.85;
 }
-.track{ display:flex; flex-direction:column; align-items:center; gap:.5vmin; }
-.track-title{ font-size:5.2vmin; font-weight:600; }
-.track-artist{ font-size:4.4vmin; color:var(--wp-dim); }
+.track{ display:flex; flex-direction:column; align-items:center; gap:.5vmin; width:88%; }
+/* 真实曲名可能很长（"歌名 - 歌手 & 合作者"），一行截断，别把三键挤出安全区。 */
+.track-title{
+  font-size:5.2vmin; font-weight:600; max-width:100%;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.track-artist{
+  font-size:4.4vmin; color:var(--wp-dim); max-width:100%;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
 .progress{
   width:64vmin; height:.9vmin; border-radius:1vmin; background:rgba(255,255,255,.12);
   overflow:hidden;
@@ -290,14 +297,17 @@ html,body{
 
     var control = event.target.closest("[data-ctl]");
     if (!control) return;
-    var button = control;
-    if (control.dataset.ctl === "play") {
-      var playing = button.dataset.playing === "1";
-      button.dataset.playing = playing ? "0" : "1";
-      button.textContent = playing ? "▶" : "❚❚";
-      // 进度条只在"播放中"推进；10 fps 的捕获看不出差别，但浏览器里自然些。
+    var name = control.dataset.ctl;
+    // 手机端（WebView 的 JS 桥）接管播控：真正播歌的是手机，场景只画状态。
+    // 浏览器预览没有桥，退化成场景自己的开关动画。
+    if (window.watchplayHost && window.watchplayHost.onControl) {
+      try { window.watchplayHost.onControl(name); return; } catch (error) { /* 落到本地兜底 */ }
+    }
+    if (name === "play") {
+      var playing = control.dataset.playing === "1";
+      control.dataset.playing = playing ? "0" : "1";
+      control.textContent = playing ? "▶" : "❚❚";
       var bar = document.querySelector("#music .progress i");
-      bar.style.transition = playing ? "none" : "width 24s linear";
       bar.style.width = playing ? "38%" : "100%";
     }
   });
@@ -327,6 +337,18 @@ html,body{
     setText("turn-street", d.road);
     setText("remaining", d.remaining);
     setText("eta", d.eta);
+
+    // 播放进度与播放状态由手机推来：进度是 0..1 的比例，不是动画。
+    if (d.progress !== undefined) {
+      var ratio = Math.max(0, Math.min(1, parseFloat(d.progress) || 0));
+      var bar = document.getElementById("progress-bar");
+      if (bar) { bar.style.transition = "none"; bar.style.width = (ratio * 100) + "%"; }
+    }
+    if (d.playing !== undefined) {
+      var on = String(d.playing) === "true";
+      var button = document.querySelector('#music [data-ctl="play"]');
+      if (button) { button.dataset.playing = on ? "1" : "0"; button.textContent = on ? "❚❚" : "▶"; }
+    }
   }
 
   // 手机从外部切页的入口：SceneUpdate(javascript = "window.watchplay.go('map')")。
