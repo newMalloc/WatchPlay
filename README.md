@@ -8,8 +8,6 @@
 
 https://github.com/user-attachments/assets/4c5a509c-e545-4814-9243-6bca52fac498
 
-53 秒，1920×1080，带背景音 · 画面不是录屏：它由 [docs/video/index.html](docs/video/index.html) 按时间轴逐帧渲染再编码，片中每一帧手表画面都是 `examples/watch-ui` 里那份 HTML 的真实渲染。
-
 ---
 
 ## 与传统投屏的区别

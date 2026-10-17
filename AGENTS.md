@@ -60,6 +60,7 @@ Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (163 JVM t
 - Commit bodies: one or two sentences on what changed and why, plus whatever a reviewer would otherwise trip over. Not a per-file list.
 - Replace stale prose instead of annotating it. A "was X, now Y" note belongs in `99-changelog.md` and nowhere else.
 - Tables over paragraphs; numbers over adjectives.
+- Public pages (`README.md`, `docs/guides/`) say what a reader can do with the project. How an artefact was produced, and any reassurance that it is genuine ("this is not a screen recording", "this is real hardware"), belongs in the matching document under `docs/` or in the commit body. A front page that explains its own making is answering a question the reader did not ask.
 - The reference hardware is an example, never the subject. Do not write "the watch advertises" when you mean BLE, or "ESP32-S3 can't" when you mean a capability the protocol does not require. Name the bearer or the capability; put board-specific facts under "reference implementation", and keep them out of conformance requirements.
 
 ## Pitfalls
