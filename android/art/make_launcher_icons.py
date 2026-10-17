@@ -13,11 +13,12 @@ measurements drive everything else and are taken from that file:
     CROP     the square both adaptive layers are cut from
 
 CROP is the load-bearing number. An adaptive icon paints a 108 x 108 dp canvas
-that every launcher masks to something inside the inscribed 72 dp circle, so the
-tile has to cover the canvas and the composition is whatever lands in that
-circle. At CROP = 1410 px — the tile's own bounding box — the watch is 66 dp
-across in the 72 dp disc. A wider crop drags the pale ground the artist left
-around the tile into the disc; a tighter one starts eating the bezel.
+but every launcher masks it to the inscribed 72 dp circle, so the tile is sized
+against that mask and not against the canvas: at CROP = 2020 px the tile lands
+at 75 dp, the mask trims 1.7 dp off each of its edges, and the artwork keeps the
+proportions it was drawn with - watch 54 % of the tile, 41 dp across, the phone
+and both strap ends inside the frame. Cropping tighter magnifies the artwork and
+cuts the phone out of frame.
 
 The ground inside the tile's rounded corners is cut away, so a squircle mask
 shows the background layer instead of a paler seam.
@@ -38,7 +39,7 @@ MODULES = ("demo", "sink")
 
 TILE = (305, 305, 1715, 1745)
 CORNER = 230
-CROP = 1410
+CROP = 2020
 # Both adaptive layers are square; the round legacy icon has to hide the pale
 # ground entirely, which needs a crop narrower than CROP.
 ROUND_CROP = 1380
