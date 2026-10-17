@@ -16,6 +16,9 @@ import com.watchplay.sdk.encoder.EncodeProfile
  * @property discontinuityOnDrop when a frame is dropped or only partly sent, the next frame is marked
  *   `DISCONTINUITY` so an H.264 decoder resets its reference state (`04-video.md` §5.4).
  * @property captureTimeoutMs how long [com.watchplay.sdk.capture.CaptureModule.captureFrame] may block.
+ *   It must be non-zero for the `PixelCopy` path: `PixelCopy` is **asynchronous** (its callback arrives on
+ *   its own looper), so a zero timeout returns before the copy can complete and the pipeline then skips
+ *   every frame. 100 ms is one frame period at the reference 10 fps and a paint normally takes 1–16 ms.
  */
 data class PipelineConfig(
     val profile: EncodeProfile = EncodeProfile.Mjpeg(),
@@ -23,7 +26,7 @@ data class PipelineConfig(
     val maxQueueDepth: Int = 2,
     val creditFloorChunks: Int = 1,
     val discontinuityOnDrop: Boolean = true,
-    val captureTimeoutMs: Long = 0L,
+    val captureTimeoutMs: Long = 100L,
 ) {
 
     init {

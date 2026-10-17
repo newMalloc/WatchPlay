@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  WatchPlay :demo — the whole UI: the mirrored scene on top, a button, and a live stats log.
+  WatchPlay :demo — the mirrored scene, the frame that is about to be sent, and a live stats log.
 
   The scene lives inside a container rather than being declared as a WebView here, because
   `06-rendering.md` §3.2 step 1 requires the WebView to be created from a `densityDpi = 160`
@@ -8,9 +8,10 @@
   side. MainActivity does that programmatically, and it also pins the WebView to the negotiated
   466x466 so the captured bitmap is what the watch will actually receive.
 
-  The frame preview is a sibling of the WebView inside the same container: it shows the decoded JPEG
-  that just left the encoder, which is the only way to tell a working capture from one that returns
-  black on a device where the WebView is composited in another surface.
+  Nothing may be drawn over the scene: `PixelCopy` copies the window region under the WebView, so an
+  overlay would end up inside the frame that goes to the watch — the preview would mirror itself.
+  That is why the frame preview sits in its own row below the scene, and enlarging it opens a dialog
+  (a dialog is a separate window surface, so it cannot contaminate the capture either).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -21,36 +22,37 @@
     <FrameLayout
         android:id="@+id/scene_container"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="3"
-        android:background="#05070c">
+        android:layout_height="wrap_content"
+        android:background="#05070c" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <ImageView
             android:id="@+id/frame_preview"
-            android:layout_width="112dp"
-            android:layout_height="112dp"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="8dp"
+            android:layout_width="88dp"
+            android:layout_height="88dp"
             android:background="#101722"
             android:contentDescription="@string/frame_preview"
             android:padding="2dp"
             android:scaleType="fitCenter"
-            android:visibility="gone" />
+            android:visibility="invisible" />
 
         <TextView
             android:id="@+id/frame_label"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:layout_margin="8dp"
-            android:background="#CC101722"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="4dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:text="@string/frame_label_empty"
             android:textColor="#8a93a8"
-            android:textSize="11sp"
-            android:visibility="gone" />
+            android:textSize="11sp" />
 
-    </FrameLayout>
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -79,14 +81,14 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="@string/frame_preview" />
+            android:text="@string/frame_preview_full" />
 
     </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="2"
+        android:layout_weight="1"
         android:layout_marginTop="8dp">
 
         <TextView

@@ -170,9 +170,9 @@ class DemoWatchStub(
                 "@${result.targetFps}fps q=${result.quality} chunk=${result.maxChunkBytes}",
         )
         // `01-transport.md` §6.1: the initial window comes only from this explicit grant.
-        lastGrantedCredits = result.initialCredits
+        lastGrantedCredits = initialWindow(result)
         transport.send(
-            Frame.of(FrameType.FEEDBACK, Feedback(credits = result.initialCredits.toLong()).encode(), seq = nextSeq()),
+            Frame.of(FrameType.FEEDBACK, Feedback(credits = lastGrantedCredits.toLong()).encode(), seq = nextSeq()),
         )
     }
 
@@ -184,9 +184,10 @@ class DemoWatchStub(
                 logFrame(outcome.frame)
                 // Credit is granted after a frame is consumed, which is what a real watch does after
                 // decoding (`04-video.md` §4.1, §8.1).
-                val window = negotiated?.initialCredits?.toLong() ?: 64L
-                lastGrantedCredits = window.toInt()
-                transport.send(Frame.of(FrameType.FEEDBACK, feedbackFor(window).encode(), seq = nextSeq()))
+                lastGrantedCredits = windowFor(negotiated)
+                transport.send(
+                    Frame.of(FrameType.FEEDBACK, feedbackFor(lastGrantedCredits.toLong()).encode(), seq = nextSeq()),
+                )
             }
 
             is AssemblyResult.Rejected -> {
@@ -197,6 +198,22 @@ class DemoWatchStub(
             is AssemblyResult.Progress -> Unit
         }
     }
+
+    /**
+     * Initial window this scripted watch grants.
+     *
+     * `04-video.md` §4.1 defaults `initial_credits` to 64, but 1 credit is 1 chunk and a 466×466 JPEG at
+     * quality 70 is 47–76 chunks once the 20-byte subheader is subtracted. A 64-chunk window therefore
+     * cannot hold one frame: the phone runs out mid-frame, drops it, and the next frame cannot start
+     * either — the stream stalls with a permanently empty window. A real receiver grants what its
+     * reassembly buffer can hold, and nudges again when credit falls below a quarter (§4.4).
+     */
+    private fun initialWindow(result: CapsResult): Int =
+        maxOf(result.initialCredits, MID_FRAME_HEADROOM_CHUNKS)
+
+    /** Window granted after each decoded frame; the same headroom applies. */
+    private fun windowFor(negotiated: CapsResult?): Int =
+        maxOf(negotiated?.initialCredits ?: 0, MID_FRAME_HEADROOM_CHUNKS)
 
     private fun feedbackFor(window: Long): Feedback = Feedback(
         credits = window,
@@ -240,5 +257,8 @@ class DemoWatchStub(
 
         /** Log a line every n-th frame so the logcat stays readable at 10 fps. */
         private const val LOG_EVERY_N_FRAMES: Long = 10L
+
+        /** Chunk window large enough for one 466×466 q70 frame plus a second one in flight. */
+        private const val MID_FRAME_HEADROOM_CHUNKS: Int = 256
     }
 }

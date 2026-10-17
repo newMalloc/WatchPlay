@@ -107,7 +107,6 @@ class MainActivity :
     /** Reused decode target, so a 4 fps preview does not allocate a bitmap per frame. */
     private var previewBitmap: Bitmap? = null
     private var lastPreviewAtMs = 0L
-    private var previewExpanded = false
 
     @Volatile
     private var lastFrame: PipelineFrame? = null
@@ -156,7 +155,7 @@ class MainActivity :
             if (client == null) startLoopbackMirroring() else stopMirroring()
         }
         watchButton.setOnClickListener { connectToWatch() }
-        frameButton.setOnClickListener { togglePreviewSize() }
+        frameButton.setOnClickListener { showFrameDialog() }
 
         // Start on the loopback link: the point of this APK is to show the picture that would be sent,
         // and that needs no second device and no permissions.
@@ -241,7 +240,6 @@ class MainActivity :
     private fun startLoopbackMirroring() {
         val (phone, watch) = LoopbackTransport.pair(phoneId = "demo-phone", watchId = "demo-watch")
         val stub = DemoWatchStub(watch)
-        stub.start()
         linkLabel = "loopback (scripted watch)"
         startMirroring(phone, stub)
     }
@@ -285,6 +283,10 @@ class MainActivity :
         // The scene is loaded once negotiation reports the panel geometry (`CAPS_ACK`).
         newClient.setApp(sceneApp)
         newClient.connect()
+        // The watch speaks first, so its `HELLO` must not be sent before the phone's endpoint is open:
+        // `LoopbackTransport` drops a frame that arrives at a closed endpoint, and the session then times
+        // out with "no HELLO within 3000 ms".
+        stub?.start()
         newClient.start()
 
         toggleButton.text = getString(R.string.stop_mirroring)
@@ -378,23 +380,50 @@ class MainActivity :
         return samples > 0 && total / samples < BLANK_LUMA_THRESHOLD
     }
 
-    /** Switches between the corner thumbnail and the frame at 1:1 over the scene. */
-    private fun togglePreviewSize() {
-        previewExpanded = !previewExpanded
-        val margin = (8 * resources.displayMetrics.density).toInt()
-        previewView.layoutParams = if (previewExpanded) {
-            FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER)
-        } else {
-            FrameLayout.LayoutParams(
-                (THUMBNAIL_DP * resources.displayMetrics.density).toInt(),
-                (THUMBNAIL_DP * resources.displayMetrics.density).toInt(),
-                Gravity.BOTTOM or Gravity.END,
-            ).apply { setMargins(margin, margin, margin, margin) }
+    /**
+     * Shows the last frame at 1:1 in a dialog.
+     *
+     * A dialog is its own window, which matters here: an `ImageView` laid over the scene would be
+     * composited into the same window and `PixelCopy` would capture it, so the preview would end up
+     * mirroring itself.
+     */
+    private fun showFrameDialog() {
+        val frame = lastFrame
+        val decoded = previewBitmap?.takeIf { !it.isRecycled }
+        if (frame == null || decoded == null) {
+            Toast.makeText(this, R.string.frame_none, Toast.LENGTH_SHORT).show()
+            return
         }
-        previewView.scaleType = ImageView.ScaleType.FIT_CENTER
-        frameButton.text = getString(
-            if (previewExpanded) R.string.frame_preview_full else R.string.frame_preview,
-        )
+        // A snapshot, because the preview bitmap is reused as the next frame is decoded.
+        val snapshot = decoded.copy(Bitmap.Config.ARGB_8888, false) ?: return
+        val image = ImageView(this).apply {
+            setImageBitmap(snapshot)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = getString(R.string.frame_preview)
+        }
+        // Sized in pixels: 1:1 is the point, and an AlertDialog otherwise shrinks the view to its own
+        // content width. The outer frame matches the dialog width so the square ends up centred.
+        val stage = FrameLayout(this).apply {
+            addView(
+                image,
+                FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER),
+            )
+        }
+        AlertDialog.Builder(this)
+            .setTitle(
+                getString(
+                    R.string.frame_label,
+                    frame.frameId,
+                    frame.encoded.width,
+                    frame.encoded.height,
+                    "${frame.encoded.sizeBytes / 1024} kB",
+                    frame.chunkTotal,
+                ),
+            )
+            .setView(stage)
+            .setPositiveButton(android.R.string.ok) { _, _ -> snapshot.recycle() }
+            .setOnDismissListener { snapshot.recycle() }
+            .show()
     }
 
     // ---------------------------------------------------------------- BLE discovery
@@ -532,9 +561,6 @@ class MainActivity :
 
         /** How often the preview decodes a frame; the stream itself runs at 10 fps. */
         private const val PREVIEW_PERIOD_MS = 250L
-
-        /** Thumbnail edge in dp; tapping the button shows the frame at 1:1 instead. */
-        private const val THUMBNAIL_DP = 112
 
         /** Sampling stride for the blank-frame check: 466/16 is about 30×30 samples. */
         private const val LUMA_SAMPLE_STEP_PX = 16
