@@ -72,6 +72,9 @@ class GattServerTransport(
     private val bytesSent = AtomicLong(0L)
     private val lock = Any()
 
+    /** Serialises whole frames onto the notify path; see [send]. */
+    private val sendLock = Any()
+
     @Volatile
     private var listener: TransportListener? = null
 
@@ -196,15 +199,20 @@ class GattServerTransport(
 
         val encoded = FrameCodec.encode(frame)
         val bearerTu = (negotiatedMtu - ProtocolLimits.ATT_WRITE_OVERHEAD).coerceAtLeast(20)
-        var offset = 0
-        while (offset < encoded.size) {
-            val end = minOf(offset + bearerTu, encoded.size)
-            val piece = encoded.copyOfRange(offset, end)
-            val accepted = notify(device, characteristic, piece)
-            if (!accepted) {
-                return SendResult.Failed("notification rejected at offset $offset/${encoded.size}", null)
+        // A frame's fragments must not interleave with another frame's: the decoder thread sends
+        // FEEDBACK while the transport thread may be answering a PING, and RFCOMM/GATT preserve order
+        // per sender only. One lock keeps the byte stream a stream.
+        synchronized(sendLock) {
+            var offset = 0
+            while (offset < encoded.size) {
+                val end = minOf(offset + bearerTu, encoded.size)
+                val piece = encoded.copyOfRange(offset, end)
+                val accepted = notify(device, characteristic, piece)
+                if (!accepted) {
+                    return SendResult.Failed("notification rejected at offset $offset/${encoded.size}", null)
+                }
+                offset = end
             }
-            offset = end
         }
         framesSent.incrementAndGet()
         bytesSent.addAndGet(encoded.size.toLong())
