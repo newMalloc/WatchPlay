@@ -70,17 +70,31 @@ html,body{
 
 /* ---------------------------------------------------------------- 底部切换 */
 /* 只放"别的页面"：当前页面不给自己的入口，也不会和场景里的按钮重复。 */
-.tabs{ display:flex; gap:3vmin; align-items:center; justify-content:center; }
-.btn-switch{
-  width:20vmin; height:20vmin; border-radius:50%;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5vmin;
-  background:rgba(255,255,255,.06); border:.35vmin solid rgba(255,255,255,.12);
-  color:var(--wp-fg); font-size:4.4vmin; font-family:inherit;
-  transition:background .12s linear, border-color .12s linear;
+.tabs{ display:flex; gap:3.4vmin; align-items:center; justify-content:center; }
+/*
+  按钮的三层不再是"一个半透明圆 + 一条细边"：竖向渐变给一点厚度，内高光把上沿点亮，
+  外投影让它离开背景。10 fps 捕获下，这比纯平色更容易看出是个可按的实体。
+*/
+.btn-switch, .btn-ctl{
+  position:relative; margin:0; padding:0; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.032));
+  border:.35vmin solid rgba(255,255,255,.14);
+  box-shadow:inset 0 .35vmin 0 rgba(255,255,255,.075), 0 .7vmin 1.8vmin rgba(0,0,0,.38);
+  color:var(--wp-fg); font-family:inherit;
+  transition:background .1s linear, border-color .1s linear, transform .1s ease-out, box-shadow .1s linear;
 }
-.btn-switch .ico{ font-size:7vmin; line-height:1; color:var(--wp-accent); }
-.btn-switch .lbl{ font-size:4.4vmin; color:var(--wp-dim); }
-.btn-switch:active{ background:rgba(74,198,255,.22); border-color:var(--wp-accent); }
+.btn-switch:active, .btn-ctl:active{ transform:scale(.955); }
+
+.btn-switch{
+  width:20vmin; height:20vmin; flex-direction:column; gap:.7vmin;
+}
+.btn-switch svg{ width:7.2vmin; height:7.2vmin; fill:var(--wp-accent); }
+.btn-switch .lbl{ font-size:4.4vmin; line-height:1; color:var(--wp-dim); letter-spacing:.1vmin; }
+.btn-switch:active{
+  background:linear-gradient(180deg, rgba(74,198,255,.30), rgba(74,198,255,.10));
+  border-color:var(--wp-accent);
+}
 
 /* ---------------------------------------------------------------- 表盘 */
 .bg-face{
@@ -135,17 +149,25 @@ html,body{
   overflow:hidden;
 }
 .progress i{ display:block; width:38%; height:100%; background:var(--wp-accent); }
-.controls{ display:flex; gap:3vmin; align-items:center; }
-.btn-ctl{
-  width:19.4vmin; height:19.4vmin; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  background:rgba(255,255,255,.06); border:.35vmin solid rgba(255,255,255,.12);
-  color:var(--wp-fg); font-size:5.6vmin; font-family:inherit;
-}
+.controls{ display:flex; gap:4.2vmin; align-items:center; }
+.btn-ctl{ width:19.4vmin; height:19.4vmin; }
+/* 图标用内联 SVG 而不是 ⏮▶⏭ 字符：字形宽度随系统字体变，播放三角在圆里永远偏右。 */
+.btn-ctl svg{ width:52%; height:52%; fill:currentColor; }
 .btn-ctl[data-primary="1"]{
-  background:rgba(74,198,255,.20); border-color:var(--wp-accent); font-size:6.4vmin;
+  width:21.6vmin; height:21.6vmin;
+  background:linear-gradient(180deg, rgba(74,198,255,.40), rgba(74,198,255,.14));
+  border-color:var(--wp-accent);
+  box-shadow:0 0 3.4vmin rgba(74,198,255,.32),
+             inset 0 .35vmin 0 rgba(255,255,255,.18),
+             0 .8vmin 2.2vmin rgba(0,0,0,.42);
 }
-.btn-ctl:active{ background:rgba(74,198,255,.30); }
+.btn-ctl[data-primary="1"] svg{ width:46%; height:46%; }
+.btn-ctl:active{ background:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.06)); }
+.btn-ctl[data-primary="1"]:active{ background:linear-gradient(180deg, rgba(74,198,255,.52), rgba(74,198,255,.22)); }
+/* 播放/暂停是同一个按钮的两态：由 dataset.playing 切换，不用再改写 textContent。 */
+.btn-ctl .ico-pause{ display:none; }
+.btn-ctl[data-playing="1"] .ico-play{ display:none; }
+.btn-ctl[data-playing="1"] .ico-pause{ display:block; }
 
 /* ---------------------------------------------------------------- 导航 */
 .bg-map{ overflow:hidden; }
@@ -201,8 +223,8 @@ html,body{
     </div>
 
     <div class="tabs">
-      <button class="btn-switch" data-goto="music"><span class="ico">♪</span><span class="lbl">音乐</span></button>
-      <button class="btn-switch" data-goto="map"><span class="ico">➤</span><span class="lbl">导航</span></button>
+      <button class="btn-switch" data-goto="music"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="14.4" y="3.4" width="1.9" height="10.4" rx=".9"/><path d="M16.3 3.4 20.6 2.2v3.1l-4.3 1.3z"/><ellipse cx="12.2" cy="14.9" rx="3.1" ry="2.5"/></svg><span class="lbl">音乐</span></button>
+      <button class="btn-switch" data-goto="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 2.8 2.9 10.4l7.1 2.6 2.6 7.1z"/></svg><span class="lbl">导航</span></button>
     </div>
   </div>
 </section>
@@ -222,14 +244,14 @@ html,body{
     <div class="progress"><i id="progress-bar"></i></div>
 
     <div class="controls">
-      <button class="btn-ctl" data-ctl="prev" aria-label="上一首">⏮</button>
-      <button class="btn-ctl" data-ctl="play" data-primary="1" aria-label="播放/暂停">▶</button>
-      <button class="btn-ctl" data-ctl="next" aria-label="下一首">⏭</button>
+      <button class="btn-ctl" data-ctl="prev" aria-label="上一首"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4.6" width="2.6" height="14.8" rx="1.1"/><polygon points="18.8,4.6 9.6,12 18.8,19.4"/></svg></button>
+      <button class="btn-ctl" data-ctl="play" data-primary="1" data-playing="0" aria-label="播放/暂停"><svg class="ico-play" viewBox="0 0 24 24" aria-hidden="true"><polygon points="8.2,4.8 19,12 8.2,19.2"/></svg><svg class="ico-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="7.2" y="4.6" width="3.5" height="14.8" rx="1.2"/><rect x="13.3" y="4.6" width="3.5" height="14.8" rx="1.2"/></svg></button>
+      <button class="btn-ctl" data-ctl="next" aria-label="下一首"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="15.4" y="4.6" width="2.6" height="14.8" rx="1.1"/><polygon points="5.2,4.6 14.4,12 5.2,19.4"/></svg></button>
     </div>
 
     <div class="tabs">
-      <button class="btn-switch" data-goto="face"><span class="ico">◉</span><span class="lbl">表盘</span></button>
-      <button class="btn-switch" data-goto="map"><span class="ico">➤</span><span class="lbl">导航</span></button>
+      <button class="btn-switch" data-goto="face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.6" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="2.9"/></svg><span class="lbl">表盘</span></button>
+      <button class="btn-switch" data-goto="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 2.8 2.9 10.4l7.1 2.6 2.6 7.1z"/></svg><span class="lbl">导航</span></button>
     </div>
   </div>
 </section>
@@ -264,8 +286,8 @@ html,body{
     </div>
 
     <div class="tabs">
-      <button class="btn-switch" data-goto="face"><span class="ico">◉</span><span class="lbl">表盘</span></button>
-      <button class="btn-switch" data-goto="music"><span class="ico">♪</span><span class="lbl">音乐</span></button>
+      <button class="btn-switch" data-goto="face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.6" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="2.9"/></svg><span class="lbl">表盘</span></button>
+      <button class="btn-switch" data-goto="music"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="14.4" y="3.4" width="1.9" height="10.4" rx=".9"/><path d="M16.3 3.4 20.6 2.2v3.1l-4.3 1.3z"/><ellipse cx="12.2" cy="14.9" rx="3.1" ry="2.5"/></svg><span class="lbl">音乐</span></button>
     </div>
   </div>
 </section>
@@ -313,7 +335,6 @@ html,body{
     if (name === "play") {
       var playing = control.dataset.playing === "1";
       control.dataset.playing = playing ? "0" : "1";
-      control.textContent = playing ? "▶" : "❚❚";
       var bar = document.querySelector("#music .progress i");
       bar.style.width = playing ? "38%" : "100%";
     }
@@ -374,7 +395,7 @@ html,body{
     if (d.playing !== undefined) {
       var on = String(d.playing) === "true";
       var button = document.querySelector('#music [data-ctl="play"]');
-      if (button) { button.dataset.playing = on ? "1" : "0"; button.textContent = on ? "❚❚" : "▶"; }
+      if (button) button.dataset.playing = on ? "1" : "0";
     }
   }
 
