@@ -2,9 +2,9 @@ package com.watchplay.sdk.render
 
 import android.annotation.SuppressLint
 import android.os.Build
+import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
-import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -31,13 +31,17 @@ import com.watchplay.sdk.touch.TouchAction
  *    needs no extra dependency. The preferred `WebViewCompat.addDocumentStartJavaScript` path lives in
  *    `androidx.webkit`, which `:sdk` does not depend on yet; see the TODO below.
  *  * [dispatchTouch] injects native [MotionEvent]s, as `05-input.md` §2.4 requires.
+ *  * **Every entry point is thread-safe.** The session thread calls [loadScene] and [dispatchTouch] and
+ *    the pipeline thread calls [applyUpdate], but a `WebView` only accepts work from the thread that
+ *    created it ([attach]). All three hop to the WebView's handler, so callers never marshal.
+ *  * **Frame requests wait for the paint.** An update with `requestFrameAfterUpdate` reports through
+ *    `postVisualStateCallback`, i.e. once the compositor holds the new content, so a capture taken in
+ *    response cannot read the previous frame.
  *  * [WebViewClient.onPageCommitVisible] drives readiness so the first capture waits for a painted
  *    document.
  *
  * ## What is a stub
  *
- *  * [requestFrame] reports readiness only. Real frame pacing needs a hand-off to the capture path
- *    (GL texture or `PixelCopy`) once the compositor has the new content.
  *  * [WatchScene.assets] are not served yet: a scene must inline its CSS or use `file:///android_asset/`
  *    via `baseUrl`.
  *  * The render-to-texture path of `06-rendering.md` §7 is not implemented; the capture side provides it.
@@ -47,26 +51,28 @@ import com.watchplay.sdk.touch.TouchAction
  *  * Add `androidx.webkit:webkit` and prefer `WebViewCompat.addDocumentStartJavaScript(web, js, setOf("*"))`
  *    when `WebViewFeature.isFeatureSupported(DOCUMENT_START_SCRIPT)`, keeping the string substitution as
  *    the fallback.
- *  * Create the WebView with a `densityDpi = 160` configuration context so `1 CSS px == 1 watch pixel`
- *    and `1vmin == 1%` of the shorter side; the demo module shows the pattern.
  *
  * @property layout geometry of the watch being mirrored; fixed at construction, because changing it
  *   requires a new layout pass and therefore a scene reload.
  * @property listener observer for scene lifecycle events; `null` is allowed.
  */
-@UiThread
 class WebViewRenderModule(
     override val layout: WatchLayoutSpec,
     private val listener: UIRenderModule.UIRenderListener? = null,
 ) : UIRenderModule {
 
+    @Volatile
     private var webView: WebView? = null
+
     private var pageCommitted = false
     private var downTimeMs = 0L
+    private var paintTicket = 0L
 
+    @Volatile
     override var currentScene: WatchScene? = null
         private set
 
+    @Volatile
     override var isReady: Boolean = false
         private set
 
@@ -74,9 +80,11 @@ class WebViewRenderModule(
      * Attaches the WebView this module drives. Must be called before [loadScene].
      *
      * The WebView is supplied by the app because only the app knows its view hierarchy and can create it
-     * with the density configuration `06-rendering.md` §3.2 step 1 requires.
+     * with the density configuration `06-rendering.md` §3.2 step 1 requires. Call this on the UI thread:
+     * it installs the clients, and every later call is posted to that thread.
      */
     @SuppressLint("SetJavaScriptEnabled")
+    @UiThread
     fun attach(webView: WebView) {
         this.webView = webView
         webView.settings.apply {
@@ -101,18 +109,12 @@ class WebViewRenderModule(
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageCommitVisible(view: WebView?, url: String?) {
-                pageCommitted = true
-                isReady = true
-                currentScene?.let { scene -> listener?.onSceneReady(scene.id, layout) }
+                markReady()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 // Some WebView versions do not deliver onPageCommitVisible; keep a fallback.
-                if (!pageCommitted) {
-                    pageCommitted = true
-                    isReady = true
-                    currentScene?.let { scene -> listener?.onSceneReady(scene.id, layout) }
-                }
+                if (!pageCommitted) markReady()
             }
         }
         webView.webChromeClient = object : WebChromeClient() {
@@ -136,34 +138,41 @@ class WebViewRenderModule(
             )
             return
         }
-        pageCommitted = false
-        isReady = false
-        currentScene = scene
-        view.setBackgroundColor(if (scene.transparentBackground) 0x00000000 else 0xFF000000.toInt())
-        view.loadDataWithBaseURL(scene.baseUrl, injectNegotiatedCss(scene.html, layout), "text/html", "utf-8", null)
+        onUiThread(view) {
+            if (webView !== view) return@onUiThread
+            pageCommitted = false
+            isReady = false
+            currentScene = scene
+            view.setBackgroundColor(if (scene.transparentBackground) 0x00000000 else 0xFF000000.toInt())
+            view.loadDataWithBaseURL(
+                scene.baseUrl,
+                injectNegotiatedCss(scene.html, layout),
+                "text/html",
+                "utf-8",
+                null,
+            )
+        }
     }
 
     override fun applyUpdate(update: SceneUpdate) {
         val view = webView ?: return
-        if (!isReady) return
-        val scene = currentScene ?: return
-        if (scene.id != update.sceneId) return
+        onUiThread(view) {
+            if (webView !== view || !isReady) return@onUiThread
+            val scene = currentScene ?: return@onUiThread
+            if (scene.id != update.sceneId) return@onUiThread
 
-        if (update.data.isNotEmpty()) {
-            val json = update.data.entries.joinToString(",") { (key, value) ->
-                "\"${key.replace("\"", "\\\"")}\":$value"
+            if (update.data.isNotEmpty()) {
+                val json = update.data.entries.joinToString(",") { (key, value) ->
+                    "\"${key.replace("\"", "\\\"")}\":$value"
+                }
+                view.evaluateJavascript(
+                    "window.watchplay=window.watchplay||{};" +
+                        "window.watchplay.data=Object.assign(window.watchplay.data||{},{$json});",
+                    null,
+                )
             }
-            view.evaluateJavascript(
-                "window.watchplay=window.watchplay||{};" +
-                    "window.watchplay.data=Object.assign(window.watchplay.data||{},{$json});",
-                null,
-            )
-        }
-        update.javascript?.let { snippet -> view.evaluateJavascript("(function(){ $snippet })();", null) }
-        if (update.requestFrameAfterUpdate) {
-            // TODO(next contributor): gate on postVisualStateCallback before signalling, otherwise the
-            // capture may read the previous paint.
-            listener?.onFrameRequested()
+            update.javascript?.let { snippet -> view.evaluateJavascript("(function(){ $snippet })();", null) }
+            if (update.requestFrameAfterUpdate) awaitPaint(view)
         }
     }
 
@@ -171,6 +180,61 @@ class WebViewRenderModule(
 
     override fun dispatchTouch(touch: MappedTouch): Boolean {
         val view = webView ?: return false
+        // The WebView's verdict is only known on its own thread; `true` means "queued", which is what the
+        // touch pipeline needs — a dropped event would otherwise look like an unresponsive panel.
+        onUiThread(view) {
+            if (webView === view) dispatchTouchOnUiThread(view, touch)
+        }
+        return true
+    }
+
+    override fun release() {
+        val view = webView
+        webView = null
+        pageCommitted = false
+        isReady = false
+        currentScene = null
+        if (view == null) return
+        // Inline when the caller is already on the UI thread (the usual `onDestroy` case), so `destroy()`
+        // is not deferred to a post that a detached WebView may never run.
+        onUiThread(view) {
+            view.stopLoading()
+            view.webViewClient = WebViewClient()
+            view.destroy()
+        }
+    }
+
+    // ---------------------------------------------------------------- internals
+
+    private fun markReady() {
+        pageCommitted = true
+        isReady = true
+        currentScene?.let { scene -> listener?.onSceneReady(scene.id, layout) }
+    }
+
+    /**
+     * Runs [action] on the thread that owns [view].
+     *
+     * `loadScene` arrives from the session thread and `applyUpdate` from the pipeline thread; touching a
+     * `WebView` from either is undefined behaviour.
+     */
+    private fun onUiThread(view: WebView, action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) action() else view.post(action)
+    }
+
+    private fun awaitPaint(view: WebView) {
+        val ticket = ++paintTicket
+        view.postVisualStateCallback(
+            ticket,
+            object : WebView.VisualStateCallback() {
+                override fun onComplete(requestId: Long) {
+                    listener?.onFrameRequested()
+                }
+            },
+        )
+    }
+
+    private fun dispatchTouchOnUiThread(view: WebView, touch: MappedTouch) {
         val action = when (touch.action) {
             TouchAction.DOWN -> {
                 downTimeMs = SystemClock.uptimeMillis()
@@ -204,61 +268,79 @@ class WebViewRenderModule(
             0,
         )
         event.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
-        return try {
+        try {
             view.dispatchTouchEvent(event)
         } finally {
             event.recycle()
         }
     }
 
-    override fun release() {
-        val view = webView
-        webView = null
-        pageCommitted = false
-        isReady = false
-        currentScene = null
-        if (view != null) {
-            view.stopLoading()
-            view.webViewClient = WebViewClient()
-            view.destroy()
-        }
-    }
-
-    /**
-     * Injects the negotiated CSS custom properties into [html].
-     *
-     * `06-rendering.md` §2.3 R1 fixes the exact form:
-     * `--wp-safe-inset: (safe_inset_permille / 10)vmin`, injected verbatim, plus
-     * `data-screen-shape` on `<html>` so one document can serve round and square panels (§3.4).
-     *
-     * Scene authors place [INJECTION_MARKER] inside `:root{...}`; when the marker is absent the values
-     * are prepended as a `style` attribute on the `html` element, which still applies before the first
-     * paint.
-     */
-    internal fun injectNegotiatedCss(html: String, layout: WatchLayoutSpec): String {
-        val declarations = "--wp-safe-inset:${layout.cssSafeInsetValue};"
-        val shape = layout.cssScreenShape
-
-        if (!html.contains("<html", ignoreCase = true)) {
-            return "<html data-screen-shape=\"$shape\" style=\"$declarations\">$html</html>"
-        }
-
-        var result = if (html.contains(INJECTION_MARKER)) {
-            html.replace(INJECTION_MARKER, declarations)
-        } else {
-            html.replaceFirst("<html", "<html style=\"$declarations\"")
-        }
-        if (!result.contains("data-screen-shape", ignoreCase = true)) {
-            result = result.replaceFirst("<html", "<html data-screen-shape=\"$shape\"")
-        }
-        return result
-    }
-
     companion object {
+
         /**
          * Marker a scene places inside `:root{}` so that the phone can substitute the negotiated
          * values with a plain string replace — the dependency-free fallback of `06-rendering.md` §3.2.
+         *
+         * The marker **must sit after the scene's own fallback declaration**: the injected declaration
+         * lands in the same rule and the later one wins.
          */
         const val INJECTION_MARKER: String = "/*WP_INJECT*/"
     }
 }
+
+/**
+ * Injects the negotiated safe-area custom property and `data-screen-shape` into [html].
+ *
+ * `06-rendering.md` §2.3 R1 fixes the exact form:
+ * `--wp-safe-inset: (safe_inset_permille / 10)vmin`, injected verbatim, plus `data-screen-shape` on
+ * `<html>` so one document can serve round and square panels (§3.4).
+ *
+ * Two carriers, in order of preference:
+ *
+ *  1. [WebViewRenderModule.INJECTION_MARKER] inside the scene's `:root{}`. The replacement keeps the
+ *     scene's fallback in place and relies on cascade order — see the marker's KDoc.
+ *  2. A `style` attribute on `<html>` (merged into an existing `style`, if any). An inline declaration
+ *     wins over every stylesheet rule, so this path does not care where the fallback sits.
+ *
+ * The `data-screen-shape` attribute is added only when the opening tag does not already carry it: a
+ * scene may hard-code a shape for a single-panel family, and overwriting it would be a lie.
+ */
+internal fun injectNegotiatedCss(html: String, layout: WatchLayoutSpec): String {
+    val declarations = "--wp-safe-inset:${layout.cssSafeInsetValue};"
+    val replaced = html.replace(WebViewRenderModule.INJECTION_MARKER, declarations)
+    val openTag = HTML_OPEN_TAG.find(replaced)
+        ?: return "<html data-screen-shape=\"${layout.cssScreenShape}\" style=\"$declarations\">$replaced</html>"
+
+    var tag = openTag.value
+    if (!tag.contains(DATA_SCREEN_SHAPE, ignoreCase = true)) {
+        tag = withAttribute(tag, "data-screen-shape=\"${layout.cssScreenShape}\"")
+    }
+    if (!html.contains(WebViewRenderModule.INJECTION_MARKER)) {
+        tag = withStyleDeclaration(tag, declarations)
+    }
+    return if (tag == openTag.value) replaced else replaced.replaceRange(openTag.range, tag)
+}
+
+/** The opening `<html ...>` tag, if the document has one. */
+private val HTML_OPEN_TAG = Regex("<html[^>]*>", RegexOption.IGNORE_CASE)
+
+private const val DATA_SCREEN_SHAPE = "data-screen-shape"
+
+/** Appends [attribute] to an opening tag, before its `>`. */
+private fun withAttribute(tag: String, attribute: String): String {
+    val end = tag.lastIndexOf('>')
+    val head = tag.substring(0, end)
+    val separator = if (head.last().isWhitespace()) "" else " "
+    return head + separator + attribute + tag.substring(end)
+}
+
+/** Prepends [declarations] to the tag's `style` attribute, creating one when absent. */
+private fun withStyleDeclaration(tag: String, declarations: String): String {
+    val existing = STYLE_ATTRIBUTE.find(tag) ?: return withAttribute(tag, "style=\"$declarations\"")
+    val value = existing.groupValues[1].ifEmpty { existing.groupValues[2] }.trim()
+    // Re-quote with `"` so the result is one predictable form; `declarations` already ends with `;`.
+    return tag.replaceRange(existing.range, "style=\"$declarations $value\"")
+}
+
+/** Matches an opening-tag `style="..."` (or `'...'`) attribute and captures its value. */
+private val STYLE_ATTRIBUTE = Regex("""\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)

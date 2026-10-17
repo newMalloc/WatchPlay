@@ -152,7 +152,7 @@ sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 
 ```pwsh
 cd android
-./gradlew :sdk:test          # 97 项协议逻辑单元测试，不需要设备
+./gradlew :sdk:test          # 106 项协议逻辑单元测试，不需要设备
 ./gradlew :sdk:assembleDebug
 ```
 
@@ -167,11 +167,11 @@ cd android
 
 在设备上打开 Demo App，点 **Start mirroring**。你会看到：
 
-- 上方 WebView 里是一个动画的手表界面（这就是"手表节目"的来源）
-- 下方的统计文本持续刷新：`fps`、`bytes/s`、`dropped`、`latency`
+- 上方 WebView 里是 [`examples/watch-ui/demo-scene.html`](../../examples/watch-ui/demo-scene.html)——和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。上面三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
+- 下方的统计文本持续刷新：`fps`、`bytes/s`、`dropped`、`latency`，外加 `scene:`（场景就绪后的面板参数）与 `paint requests:`（`applyUpdate` 触发的合成完成回调计数）
 - 因为走的是 loopback，`latency` 只反映管线内部开销，不含蓝牙
 
-**这一步能验证**：WebView 渲染是否正常、OpenGL 捕获是否出图、编码器是否初始化成功、分块与 Credit 逻辑是否自洽。**不能验证**：真实蓝牙吞吐与手表解码性能。
+**这一步能验证**：WebView 渲染是否正常、`PixelCopy` 捕获是否出图、编码器是否初始化成功、分块与 Credit 逻辑是否自洽。**不能验证**：真实蓝牙吞吐与手表解码性能。
 
 ### 用第二台 Android 设备当手表（真实 BLE 链路）
 
@@ -188,7 +188,7 @@ cd android
 | 手表那台 | 打开 **WatchPlay Sink**，授予蓝牙权限（CONNECT + ADVERTISE） | 状态栏显示 `advertising as a 480px round sink`，链路 `OPENING` |
 | 手机那台 | 打开 Demo，点 **Connect to watch (BLE)**，授予扫描/连接权限 | 8 秒内弹出设备列表 |
 | 手机那台 | 选中列表里的 sink | 会话进入 `STREAMING`，状态区出现 `link: BLE …` |
-| 手表那台 | 屏幕上出现镜像画面，点它 | 手机端 WebView 的场景响应触摸 |
+| 手表那台 | 屏幕上出现镜像画面，点底部的「音乐」或「导航」 | 画面切到那一页，手机端 WebView 同步切页 |
 
 **这条路径能验证**：真实 MTU 协商、`bearer_tu` 分片、CCCD 订阅、Credit 往返、JPEG 解码与触控回传。**不能验证**：真手表芯片的解码性能与功耗，那要等第 3 步的板子。
 

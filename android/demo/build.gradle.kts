@@ -49,6 +49,29 @@ android {
     }
 }
 
+// The scene has exactly one copy in git: `examples/watch-ui/demo-scene.html`, the same file the browser
+// preview renders. Staging it into a build directory keeps that single source without shipping the preview
+// shell, its screenshots and the other example — pointing the asset source directory straight at
+// `examples/watch-ui` would put all of them in the APK (packaging excludes do not filter assets).
+val demoSceneAssets = layout.buildDirectory.dir("generated/demoSceneAssets")
+
+val stageDemoScene = tasks.register<Sync>("stageDemoSceneAssets") {
+    // `rootProject` is `android/`, not the repository root, hence the `../`.
+    from(rootProject.file("../examples/watch-ui/demo-scene.html"))
+    into(demoSceneAssets)
+}
+
+androidComponents {
+    onVariants { variant ->
+        // Relative to this module; an absolute Windows path is accepted here and then silently ignored.
+        variant.sources.assets?.addStaticSourceDirectory("build/generated/demoSceneAssets")
+    }
+}
+
+tasks.matching { it.name.endsWith("Assets") && it.name.startsWith("merge") }.configureEach {
+    dependsOn(stageDemoScene)
+}
+
 dependencies {
     implementation(project(":sdk"))
     implementation(libs.kotlin.stdlib)

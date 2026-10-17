@@ -47,15 +47,16 @@ data class SceneUpdate(
  *
  * ## Threading
  *
- * `loadScene`, `applyUpdate` and `release` are called from the app's main thread; implementations must
- * marshal internally if they need another. [requestFrame] may be called from the pipeline thread and
- * must be safe to call from any thread.
+ * Callers come from three places: the app's main thread, the session thread (`loadScene` after
+ * `CAPS_ACK`, `dispatchTouch` when a `TOUCH` frame arrives) and the pipeline thread (`applyUpdate`).
+ * Implementations must marshal to whatever thread they need — [WebViewRenderModule] posts to the
+ * WebView's handler. [requestFrame] must be safe to call from any thread.
  *
  * ## Implementation status
  *
- * [WebViewRenderModule] is the only implementation shipped, and it is deliberately partial: loading a
- * scene works, driving the WebView from the pipeline and coordinating the GL texture hand-off does
- * not. See its KDoc for the exact gaps.
+ * [WebViewRenderModule] is the only implementation shipped. Loading a scene, injecting the negotiated
+ * safe area, forwarding touches as native events and gating frame requests on the compositor all work;
+ * serving [WatchScene.assets] and the GL texture hand-off do not. See its KDoc for the exact gaps.
  */
 interface UIRenderModule {
 

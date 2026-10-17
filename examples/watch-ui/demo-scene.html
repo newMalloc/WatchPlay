@@ -1,30 +1,36 @@
 <!doctype html>
-<html lang="zh-CN" data-screen-shape="round">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>WatchPlay 手表场景（表盘 / 音乐 / 导航）</title>
 <!--
-  一个文档，三个场景：表盘、音乐播放、地图导航，任意点击互相切换。
+  一个文档，三个场景：表盘、音乐播放、地图导航，点击互相切换。
 
-  这个文件是**手机端要渲染并投屏给手表的那份 HTML**，所以它遵守 docs/spec/06-rendering.md：
+  这个文件就是手机端要渲染并投屏给手表的那份 HTML：android/demo 把它原样打进 APK 的 assets
+  （Gradle 直接把 examples/watch-ui 当成 asset 目录，不复制第二份），再由 :sdk 的
+  WebViewRenderModule 加载。所以它遵守 docs/spec/06-rendering.md：
     * 所有尺寸用 vmin / %，绝不用绝对像素（手表换屏不用改场景）；
-    * 边距来自 var(--wp-safe-inset)，用 vmin；圆屏由手机注入 140‰，本文件给的 14vmin 只是兜底；
-    * html[data-screen-shape] 同时服务圆屏与方屏，一个文档不写两遍；
+    * 边距只来自 var(--wp-safe-inset)：圆屏 140‰、方屏 40‰ 由手机按手表上报的值注入，本文件给的
+      14vmin 只是兜底，且注入标记必须排在兜底之后——同一个声明块里靠后的那条生效；
+    * 一个文档同时服务圆屏与方屏：方屏四角没有裁切，可用宽度更多，所以切换按钮在那儿放大一号；
     * 背景不透明——JPEG 没有 alpha，透明会被编成黑色；
     * 零外部请求：没有图片、字体、iframe、外链 CSS，图标全用 CSS 与内联 SVG；
     * 动效不短于 100 ms，因为捕获节奏约 10 fps。
 
-  浏览器里直接打开即可点击；用 ?shape=square 切方屏、?inset=60 改安全区，
-  只是为了预览方便——真机上这两个值由手机的 WebViewRenderModule 注入。
+  切页由场景自己完成（点按即切，没有网络回环）；手机也可以用 window.watchplay.go('music') 从外部切，
+  这条路径走的是 SceneUpdate.javascript，见 MirrorApp.Host.postUpdate。
+  浏览器里直接打开即可点击；?scene= / ?shape= / ?inset= 只用于预览与截图。
 -->
 <style>
 :root{
   --wp-safe-inset:14vmin;
   --wp-bg:#05070c; --wp-fg:#eef3ff; --wp-dim:#8a93a8;
   --wp-accent:#4ac6ff; --wp-warm:#ffb35c; --wp-ok:#6ee7a8;
+  /*WP_INJECT*/
 }
-html[data-screen-shape="square"]{ --wp-safe-inset:4vmin; }
+/* 方屏四角没有裁切，可用宽度更多，切换按钮放大一号；圆屏维持 20vmin。 */
+html[data-screen-shape="square"] .btn-switch{ width:22vmin; height:22vmin; }
 
 *{ box-sizing:border-box; margin:0; padding:0; }
 html,body{
@@ -252,34 +258,31 @@ html,body{
 
   var root = document.documentElement;
   var params = new URLSearchParams(location.search);
+  var scenes = Array.prototype.slice.call(document.querySelectorAll(".scene"));
+  var active = "face";
 
-  // 预览用：真机上这两个值由手机的 WebViewRenderModule 注入（06-rendering.md §2.3 R1/R2）。
+  // 预览与截图用：真机上 data-screen-shape 与 --wp-safe-inset 由手机的 WebViewRenderModule 注入
+  // （06-rendering.md §2.3 R1/R2），本文件不猜任何一边的值。
   if (params.get("shape") === "square") root.dataset.screenShape = "square";
   var inset = parseInt(params.get("inset") || "", 10);
   if (inset > 0) root.style.setProperty("--wp-safe-inset", (inset / 10) + "vmin");
 
-  var scenes = Array.prototype.slice.call(document.querySelectorAll(".scene"));
-
-  function current() {
-    var id = (location.hash || "#face").replace("#", "");
-    return document.getElementById(id) ? id : "face";
-  }
-
-  function render() {
-    var id = current();
+  function show(id) {
+    if (!document.getElementById(id)) return false;
+    active = id;
     scenes.forEach(function (scene) {
       scene.dataset.active = scene.dataset.scene === id ? "1" : "0";
     });
-  }
-
-  function go(id) {
-    if (location.hash === "#" + id) render();
-    else location.hash = id;
+    // 预览外壳（iframe 的父页）据此同步"当前页"按钮；真机上没有父页，这两个条件都不成立。
+    if (window.parent !== window && window.parent.postMessage) {
+      try { window.parent.postMessage({ watchplay: "scene", id: id }, "*"); } catch (error) { /* 忽略 */ }
+    }
+    return true;
   }
 
   document.addEventListener("click", function (event) {
     var target = event.target.closest("[data-goto]");
-    if (target) { go(target.dataset.goto); return; }
+    if (target) { show(target.dataset.goto); return; }
 
     var control = event.target.closest("[data-ctl]");
     if (!control) return;
@@ -295,7 +298,8 @@ html,body{
     }
   });
 
-  window.addEventListener("hashchange", render);
+  // 手机从外部切页的入口：SceneUpdate(javascript = "window.watchplay.go('map')")。
+  window.watchplay = { go: show, current: function () { return active; } };
 
   // 走时：一秒一次，远低于捕获帧率。
   function tick() {
@@ -309,7 +313,7 @@ html,body{
   tick();
   setInterval(tick, 1000);
 
-  render();
+  show(params.get("scene") || "face");
 })();
 </script>
 </body>

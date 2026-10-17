@@ -95,7 +95,7 @@
       <button data-inset-mode="auto" data-on="1">按形状兜底</button>
       <button data-inset-mode="fixed">手机指定值</button>
     </div>
-    <span id="inset-label">圆屏 14vmin / 方屏 4vmin（场景兜底）</span>
+    <span id="inset-label">圆屏 140‰ → 14vmin / 方屏 40‰ → 4vmin</span>
     <input id="inset" type="range" min="60" max="180" step="10" value="140" disabled>
   </div>
 </div>
@@ -121,37 +121,49 @@
       inset.value = String(permille);
       insetMode = "fixed";
     }
-    document.querySelectorAll("[data-scene]").forEach(function (button) {
-      button.dataset.on = button.dataset.scene === scene ? "1" : "0";
-    });
     document.querySelectorAll("[data-shape]").forEach(function (button) {
       button.dataset.on = button.dataset.shape === shape ? "1" : "0";
     });
     document.querySelectorAll("[data-inset-mode]").forEach(function (button) {
       button.dataset.on = button.dataset.insetMode === insetMode ? "1" : "0";
     });
+    highlightScene();
   })();
+
+  function highlightScene() {
+    document.querySelectorAll("[data-scene]").forEach(function (button) {
+      button.dataset.on = button.dataset.scene === scene ? "1" : "0";
+    });
+  }
 
   function load() {
     var permille = inset.value;
     var injected = insetMode === "fixed";
     inset.disabled = !injected;
+    // 真机上安全区由手机按形状各取一个值（圆屏 140‰、方屏 40‰），"按形状兜底"这一档模拟的就是它。
+    var effective = injected ? permille : (shape === "square" ? 40 : 140);
     insetLabel.textContent = injected
       ? "手机注入 " + permille + "‰ → " + (permille / 10) + "vmin"
-      : "圆屏 14vmin / 方屏 4vmin（场景兜底）";
-    var query = "?shape=" + shape + (injected ? "&inset=" + permille : "");
-    view.src = "../demo-scene.html" + query + "#" + scene;
+      : "圆屏 140‰ → 14vmin / 方屏 40‰ → 4vmin（当前 " + (effective / 10) + "vmin）";
+    view.src = "../demo-scene.html?scene=" + scene + "&shape=" + shape + "&inset=" + effective;
     device.classList.toggle("square", shape === "square");
   }
 
   document.querySelectorAll("[data-scene]").forEach(function (button) {
     button.addEventListener("click", function () {
       scene = button.dataset.scene;
-      document.querySelectorAll("[data-scene]").forEach(function (other) {
-        other.dataset.on = other === button ? "1" : "0";
-      });
+      highlightScene();
       load();
     });
+  });
+
+  // 表盘里点切换按钮时，场景会 postMessage 回来（file:// 下父页读不到 iframe 的地址，只能靠消息）。
+  window.addEventListener("message", function (event) {
+    var data = event.data;
+    if (!data || data.watchplay !== "scene" || !data.id) return;
+    if (data.id === scene) return;
+    scene = data.id;
+    highlightScene();
   });
 
   document.querySelectorAll("[data-shape]").forEach(function (button) {

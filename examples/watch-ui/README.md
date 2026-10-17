@@ -10,9 +10,7 @@
 
 ### 在手机端 Demo 里看
 
-`android/demo` 会加载这些文件。用法见 [快速开始](../../docs/guides/getting-started.md)。
-
-场景挂在 `examples/watch-ui/`，通过 `WatchScene` 的名字加载。
+`android/demo` 直接加载本目录的 [`demo-scene.html`](demo-scene.html)：`demo/build.gradle.kts` 把 `examples/watch-ui/` 加成 asset 目录，所以 APK 里就是这一份文件，没有第二份拷贝。链路是 `WatchScene` → `:sdk` 的 `WebViewRenderModule` → WebView → 捕获编码。用法见 [快速开始](../../docs/guides/getting-started.md)。
 
 ### 在真实手表上看
 
@@ -25,8 +23,10 @@
 
 | 文件 | 展示的规范要点 |
 | :--- | :--- |
-| [`demo-scene.html`](demo-scene.html) | 一个文档三个场景（表盘 / 音乐 / 导航），任意点击互相切换；安全区变量、圆屏/方屏自适应、`:root` 兜底值、`conic-gradient` 封面、内联 SVG 路线、零外部资源 |
+| [`demo-scene.html`](demo-scene.html) | 一个文档三个场景（表盘 / 音乐 / 导航），每页只给"另外两页"的入口，点击即切；安全区变量、注入标记排在兜底之后、`:root` 兜底值、方屏按钮放大、`conic-gradient` 封面、内联 SVG 路线、零外部资源 |
 | [`music-player.html`](music-player.html) | 安全区变量注入、`conic-gradient` 弧形进度条、圆屏/方屏自适应、触摸目标尺寸、纯状态更新不做动画 |
+
+切换页面的逻辑在场景里，不在协议里：点按由场景自己处理，没有网络回环。手机要主动切页时走 `SceneUpdate.javascript = "window.watchplay.go('map')"`（`MirrorApp.Host.postUpdate`）。
 
 ## 浏览器预览（带圆形手表外壳）
 
@@ -37,7 +37,9 @@
 | ![表盘](preview/screenshot-face.png) | 圆屏、手机注入 140‰（14vmin） |
 | ![音乐](preview/screenshot-music.png) | 同一个文档切换场景，不动布局参数 |
 | ![导航](preview/screenshot-map.png) | 内联 SVG 路线 + CSS 网格，零外部请求 |
-| ![方屏](preview/screenshot-square.png) | 同一个文档按 `data-screen-shape="square"` 换成 4vmin 内缩 |
+| ![方屏](preview/screenshot-square.png) | 同一个文档按 `data-screen-shape="square"` 放大切换按钮；内缩由预览按手机的方式给 4vmin |
+
+预览外壳只是模拟手机：它自己算出 `--wp-safe-inset` 和 `data-screen-shape` 再传给场景，就像 `WebViewRenderModule` 做的那样。「按形状兜底」这一档用的是圆屏 140‰、方屏 40‰。
 
 截图由无头浏览器生成，重新生成：
 
@@ -68,13 +70,16 @@ msedge --headless=new --disable-gpu --window-size=900,640 --virtual-time-budget=
 
 ```html
 <!DOCTYPE html>
-<html lang="zh-CN" data-screen-shape="round">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style>
-  :root { --wp-safe-inset: 14vmin; --bg: #0b0d12; --fg: #f2f4f8; }
-  html[data-screen-shape="square"] { --wp-safe-inset: 4vmin; }
+  :root {
+    --wp-safe-inset: 14vmin;   /* 兜底：手机注入时会被下面那条顶掉 */
+    --bg: #0b0d12; --fg: #f2f4f8;
+    /*WP_INJECT*/
+  }
 
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -100,6 +105,10 @@ msedge --headless=new --disable-gpu --window-size=900,640 --virtual-time-budget=
 </body>
 </html>
 ```
+
+`/*WP_INJECT*/` 是手机写入协商值的锚点，**必须排在兜底声明之后**：两条声明落在同一个 `:root` 块里，靠后的那条胜出。不要用 `html[data-screen-shape="square"]{ --wp-safe-inset: … }` 去覆盖——那条规则的特异性高于 `:root`，会把手表上报的值顶掉，等于手机自己编了边距。方屏要改的是别的尺寸（例如按钮放大），不是内缩。
+
+手机也能不认标记：没有 `/*WP_INJECT*/` 时 `WebViewRenderModule` 把声明加在 `<html>` 的 `style` 属性上，内联声明优先级最高，与兜底写在哪儿无关。
 
 ### 手机怎么把协商结果传进页面
 

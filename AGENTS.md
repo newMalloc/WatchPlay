@@ -17,7 +17,7 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 | `docs/guides/` | Usage guide |
 | `tools/` | Executable reference implementation, tests, linters (stdlib only) |
 | `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
-| `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app (loopback demo + BLE scan/connect) |
+| `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app (renders `examples/watch-ui/demo-scene.html` through `WebViewRenderModule`, loopback demo, BLE scan/connect) |
 | `android/sink` | Watch-side app for a second Android device: GATT server, JPEG decode, touch back |
 | `watch/docs/` | Watch-side reference architecture for one board. Documentation only, no firmware source |
 
@@ -38,7 +38,7 @@ After editing `docs/diagrams/*.mmd`:
 python tools/render_diagrams.py      # the only script that needs the network
 ```
 
-Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (97 JVM tests), plus
+Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (106 JVM tests), plus
 `:demo:assembleDebug` and `:sink:assembleDebug` for the two apps. JDK 17 + SDK 34.
 
 ## Changes that must travel together
@@ -61,4 +61,5 @@ Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (97 JVM te
 
 - Android builds on AGP 9.1's built-in Kotlin support. Do not add the `org.jetbrains.kotlin.android` plugin — it dies on a `BaseExtension` cast. Gradle comes from the wrapper (9.3.1). `android/local.properties` is local, never committed.
 - Chunking is `ceil(frame_bytes / (max_chunk_bytes - 20))`, not `ceil(frame_bytes / max_chunk_bytes)`. 8123 bytes at 244 is 37 chunks; 34 is wrong.
+- `:demo` stages `examples/watch-ui/demo-scene.html` into `build/generated/demoSceneAssets` before merging assets. `packaging.resources.excludes` does not filter assets, and an absolute asset source path is silently ignored — pointing the source set at `examples/watch-ui` ships the preview shell and its screenshots into the APK.
 - Diagram rendering rewrites the font stack to Arial/Helvetica. The render service measures label widths with Liberation Sans, so a client that has Trebuchet MS (~18% wider) would clip text inside `foreignObject`. Do not remove that rewrite.

@@ -31,6 +31,7 @@ ENV/
 .gradle/
 build/
 captures/
+.kotlin/
 .externalNativeBuild/
 .cxx/
 *.apk
