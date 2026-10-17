@@ -1,6 +1,5 @@
 package com.watchplay.demo
 
-import android.util.Log
 import android.webkit.JavascriptInterface
 
 /**
@@ -13,18 +12,16 @@ import android.webkit.JavascriptInterface
  *
  * The class is public because `addJavascriptInterface` reflects over public methods; a private or
  * anonymous type would silently expose nothing.
+ *
+ * @property command what to do with the command. **Not** named `onControl`: a constructor property and a
+ *   method may share a name, and then `onControl(control)` inside the method resolves to the *method* — an
+ *   infinite recursion that a tap turns into thousands of log lines and a `StackOverflowError`, with the
+ *   app never hearing a thing.
  */
-class SceneBridge(private val onControl: (String) -> Unit) {
+class SceneBridge(private val command: (String) -> Unit) {
 
     @JavascriptInterface
     fun onControl(control: String) {
-        // The bridge is reflection: a silent no-op here is indistinguishable from a scene that never
-        // clicked, so the one line that proves the wiring is worth keeping.
-        Log.i(TAG, "bridge: onControl($control)")
-        onControl(control)
-    }
-
-    private companion object {
-        const val TAG = "WatchPlayBridge"
+        command(control)
     }
 }

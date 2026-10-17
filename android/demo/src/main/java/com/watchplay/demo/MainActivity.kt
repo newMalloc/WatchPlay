@@ -170,6 +170,9 @@ class MainActivity :
 
         sceneView = createSceneWebView()
         layout = panelFrom(intent)
+        // The picture itself is a rectangle inside a padded card: without its own outline it keeps four
+        // square corners inside whatever shape the card has.
+        setPanelOutline(sceneView, layout)
         render = WebViewRenderModule(layout, this)
         render.attach(sceneView)
         // The scene turns a click on its controls into a command; see SceneBridge for why the touch path
