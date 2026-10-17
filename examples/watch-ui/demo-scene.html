@@ -56,19 +56,19 @@ html,body{
 /* 不许被 flex 压扁：圆形的封面一压就成了椭圆，这在 466px 的圆屏上很显眼。 */
 .overlay > *{ flex:0 0 auto; }
 
-/* ---------------------------------------------------------------- 底部三键 */
-.tabs{ display:flex; gap:2vmin; align-items:center; justify-content:center; }
-.btn-tab{
-  width:19.4vmin; height:19.4vmin; border-radius:6vmin;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4vmin;
-  background:rgba(255,255,255,.055); border:.35vmin solid rgba(255,255,255,.10);
-  color:var(--wp-dim); font-size:4.4vmin; font-family:inherit;
-  transition:background .12s linear, color .12s linear, border-color .12s linear;
+/* ---------------------------------------------------------------- 底部切换 */
+/* 只放"别的页面"：当前页面不给自己的入口，也不会和场景里的按钮重复。 */
+.tabs{ display:flex; gap:3vmin; align-items:center; justify-content:center; }
+.btn-switch{
+  width:20vmin; height:20vmin; border-radius:50%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.5vmin;
+  background:rgba(255,255,255,.06); border:.35vmin solid rgba(255,255,255,.12);
+  color:var(--wp-fg); font-size:4.4vmin; font-family:inherit;
+  transition:background .12s linear, border-color .12s linear;
 }
-.btn-tab[data-current="1"]{
-  color:var(--wp-fg); border-color:var(--wp-accent); background:rgba(74,198,255,.16);
-}
-.btn-tab .k{ font-size:4.4vmin; line-height:1; }
+.btn-switch .ico{ font-size:7vmin; line-height:1; color:var(--wp-accent); }
+.btn-switch .lbl{ font-size:4.4vmin; color:var(--wp-dim); }
+.btn-switch:active{ background:rgba(74,198,255,.22); border-color:var(--wp-accent); }
 
 /* ---------------------------------------------------------------- 表盘 */
 .bg-face{
@@ -78,20 +78,13 @@ html,body{
 }
 .face-top{ display:flex; flex-direction:column; align-items:center; gap:.8vmin; }
 .face-time{
-  font-size:17vmin; line-height:1; font-weight:600; letter-spacing:-.02em;
+  font-size:17vmin; line-height:1; font-weight:600;
   text-shadow:0 0 6vmin rgba(74,198,255,.28);
 }
 .face-date{ font-size:4.6vmin; color:var(--wp-dim); }
-.face-row{ display:flex; gap:5vmin; align-items:center; }
-.btn-quick{
-  width:21vmin; height:21vmin; border-radius:50%;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.6vmin;
-  background:rgba(255,255,255,.06); border:.4vmin solid rgba(255,255,255,.12);
-  color:var(--wp-fg); font-size:4.6vmin; font-family:inherit;
-}
-.btn-quick .ico{ font-size:7vmin; line-height:1; color:var(--wp-accent); }
-.btn-quick .lbl{ font-size:4.4vmin; color:var(--wp-dim); }
-.btn-quick:active{ background:rgba(74,198,255,.22); }
+.face-status{ font-size:4.4vmin; color:var(--wp-dim); opacity:.75; }
+/* 表盘只有"时钟 + 切换"两块：让时钟占满剩余空间并居中，否则会全挤在顶部。 */
+.overlay > .face-top{ flex:1 1 auto; justify-content:center; }
 
 /* ---------------------------------------------------------------- 音乐 */
 .bg-music{
@@ -181,21 +174,12 @@ html,body{
     <div class="face-top">
       <div class="face-time" id="clock">10:09</div>
       <div class="face-date" id="date">周一 3 月 2 日</div>
-    </div>
-
-    <div class="face-row">
-      <button class="btn-quick" data-goto="music" aria-label="打开音乐">
-        <span class="ico">♪</span><span class="lbl">音乐</span>
-      </button>
-      <button class="btn-quick" data-goto="map" aria-label="打开导航">
-        <span class="ico">➤</span><span class="lbl">导航</span>
-      </button>
+      <div class="face-status">电量 82% · 步数 6,240</div>
     </div>
 
     <div class="tabs">
-      <button class="btn-tab" data-goto="face" data-current="1"><span class="k">◉</span>表盘</button>
-      <button class="btn-tab" data-goto="music"><span class="k">♪</span>音乐</button>
-      <button class="btn-tab" data-goto="map"><span class="k">➤</span>导航</button>
+      <button class="btn-switch" data-goto="music"><span class="ico">♪</span><span class="lbl">音乐</span></button>
+      <button class="btn-switch" data-goto="map"><span class="ico">➤</span><span class="lbl">导航</span></button>
     </div>
   </div>
 </section>
@@ -220,9 +204,8 @@ html,body{
     </div>
 
     <div class="tabs">
-      <button class="btn-tab" data-goto="face"><span class="k">◉</span>表盘</button>
-      <button class="btn-tab" data-goto="music" data-current="1"><span class="k">♪</span>音乐</button>
-      <button class="btn-tab" data-goto="map"><span class="k">➤</span>导航</button>
+      <button class="btn-switch" data-goto="face"><span class="ico">◉</span><span class="lbl">表盘</span></button>
+      <button class="btn-switch" data-goto="map"><span class="ico">➤</span><span class="lbl">导航</span></button>
     </div>
   </div>
 </section>
@@ -257,9 +240,8 @@ html,body{
     </div>
 
     <div class="tabs">
-      <button class="btn-tab" data-goto="face"><span class="k">◉</span>表盘</button>
-      <button class="btn-tab" data-goto="music"><span class="k">♪</span>音乐</button>
-      <button class="btn-tab" data-goto="map" data-current="1"><span class="k">➤</span>导航</button>
+      <button class="btn-switch" data-goto="face"><span class="ico">◉</span><span class="lbl">表盘</span></button>
+      <button class="btn-switch" data-goto="music"><span class="ico">♪</span><span class="lbl">音乐</span></button>
     </div>
   </div>
 </section>
@@ -287,11 +269,6 @@ html,body{
     var id = current();
     scenes.forEach(function (scene) {
       scene.dataset.active = scene.dataset.scene === id ? "1" : "0";
-    });
-    Array.prototype.forEach.call(document.querySelectorAll("[data-goto]"), function (el) {
-      if (el.classList.contains("btn-tab")) {
-        el.dataset.current = el.dataset.goto === id ? "1" : "0";
-      }
     });
   }
 

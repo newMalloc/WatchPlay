@@ -26,6 +26,9 @@
   .stage{ display:flex; align-items:center; justify-content:center; }
   .device{
     position:relative; width:466px; height:466px; border-radius:50%;
+    /* content-box：边框加在 466px 之外。用 border-box 时内容区只剩 434px，里面的 466px iframe
+       会被裁掉右边和下边各 16px，画面看起来整体向右下偏。 */
+    box-sizing:content-box;
     border:16px solid #171f2b;
     box-shadow:0 0 0 2px #2a3446, 0 0 0 18px #0d131c, 0 40px 90px rgba(0,0,0,.65),
                inset 0 0 40px rgba(0,0,0,.8);
@@ -92,7 +95,7 @@
       <button data-inset-mode="auto" data-on="1">按形状兜底</button>
       <button data-inset-mode="fixed">手机指定值</button>
     </div>
-    <span id="inset-label">圆屏 14vmin / 方屏 4vmin（场景自带的兜底值）</span>
+    <span id="inset-label">圆屏 14vmin / 方屏 4vmin（场景兜底）</span>
     <input id="inset" type="range" min="60" max="180" step="10" value="140" disabled>
   </div>
 </div>
@@ -135,7 +138,7 @@
     inset.disabled = !injected;
     insetLabel.textContent = injected
       ? "手机注入 " + permille + "‰ → " + (permille / 10) + "vmin"
-      : "圆屏 14vmin / 方屏 4vmin（场景自带的兜底值）";
+      : "圆屏 14vmin / 方屏 4vmin（场景兜底）";
     var query = "?shape=" + shape + (injected ? "&inset=" + permille : "");
     view.src = "../demo-scene.html" + query + "#" + scene;
     device.classList.toggle("square", shape === "square");
