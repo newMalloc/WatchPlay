@@ -7,6 +7,7 @@ import com.watchplay.sdk.encoder.EncoderModule
 import com.watchplay.sdk.encoder.MjpegEncoder
 import com.watchplay.sdk.pipeline.MirrorPipeline
 import com.watchplay.sdk.pipeline.PipelineConfig
+import com.watchplay.sdk.pipeline.PipelineFrame
 import com.watchplay.sdk.pipeline.PipelineStats
 import com.watchplay.sdk.protocol.CapsStream
 import com.watchplay.sdk.protocol.ControlCommand
@@ -118,6 +119,7 @@ class WatchPlayClient private constructor(
         session.addListener(this)
         config.listener?.let { listeners += it }
         pipeline.seqProvider = { session.allocateSeq() }
+        pipeline.frameObserver = config.frameObserver
     }
 
     /** Starts the handshake. The watch initiates `HELLO`, so this only opens the bearer. */
@@ -319,6 +321,7 @@ class WatchPlayClient private constructor(
         val encoder: EncoderModule,
         val render: UIRenderModule?,
         val listener: Listener?,
+        val frameObserver: ((PipelineFrame) -> Unit)?,
     )
 
     /**
@@ -341,6 +344,7 @@ class WatchPlayClient private constructor(
         private var encoder: EncoderModule = MjpegEncoder()
         private var render: UIRenderModule? = null
         private var listener: Listener? = null
+        private var frameObserver: ((PipelineFrame) -> Unit)? = null
 
         /** Overrides the phone-side session tunables. */
         fun sessionConfig(config: SessionConfig): Builder = apply { this.sessionConfig = config }
@@ -360,6 +364,13 @@ class WatchPlayClient private constructor(
         /** Registers the first listener. */
         fun listener(listener: Listener): Builder = apply { this.listener = listener }
 
+        /**
+         * Observes the frames that leave the encoder, exactly as the watch will receive them.
+         *
+         * For diagnostics: callbacks arrive on the pipeline thread, so decode or display elsewhere.
+         */
+        fun frameObserver(observer: (PipelineFrame) -> Unit): Builder = apply { this.frameObserver = observer }
+
         /** Builds the client. Does not connect. */
         fun build(): WatchPlayClient = WatchPlayClient(
             ClientConfig(
@@ -370,6 +381,7 @@ class WatchPlayClient private constructor(
                 encoder = encoder,
                 render = render,
                 listener = listener,
+                frameObserver = frameObserver,
             ),
         )
     }

@@ -5,7 +5,12 @@
   The scene lives inside a container rather than being declared as a WebView here, because
   `06-rendering.md` §3.2 step 1 requires the WebView to be created from a `densityDpi = 160`
   configuration context so that `1 CSS px == 1 physical px` and therefore `1vmin == 1%` of the shorter
-  side. MainActivity does that programmatically.
+  side. MainActivity does that programmatically, and it also pins the WebView to the negotiated
+  466x466 so the captured bitmap is what the watch will actually receive.
+
+  The frame preview is a sibling of the WebView inside the same container: it shows the decoded JPEG
+  that just left the encoder, which is the only way to tell a working capture from one that returns
+  black on a device where the WebView is composited in another surface.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -18,7 +23,34 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="3"
-        android:background="#05070c" />
+        android:background="#05070c">
+
+        <ImageView
+            android:id="@+id/frame_preview"
+            android:layout_width="112dp"
+            android:layout_height="112dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="8dp"
+            android:background="#101722"
+            android:contentDescription="@string/frame_preview"
+            android:padding="2dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/frame_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="8dp"
+            android:background="#CC101722"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:textColor="#8a93a8"
+            android:textSize="11sp"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -40,6 +72,14 @@
             android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:text="@string/connect_watch" />
+
+        <Button
+            android:id="@+id/frame_toggle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="@string/frame_preview" />
 
     </LinearLayout>
 

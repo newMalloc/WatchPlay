@@ -39,6 +39,8 @@ captures/
 *.ap_
 *.dex
 *.class
+# Locally built artifacts handed out for sideloading; never committed.
+dist/
 local.properties
 android/local.properties
 *.hprof

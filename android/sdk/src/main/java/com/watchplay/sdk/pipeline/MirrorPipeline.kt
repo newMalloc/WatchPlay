@@ -2,6 +2,7 @@ package com.watchplay.sdk.pipeline
 
 import com.watchplay.sdk.capture.CaptureModule
 import com.watchplay.sdk.encoder.EncodeProfile
+import com.watchplay.sdk.encoder.EncodedFrame
 import com.watchplay.sdk.encoder.EncoderModule
 import com.watchplay.sdk.protocol.CapsResult
 import com.watchplay.sdk.protocol.Frame
@@ -65,6 +66,18 @@ class MirrorPipeline(
     /** Supplies the protocol `seq` for each video frame; wired to the session by the client. */
     @Volatile
     var seqProvider: (() -> Int)? = null
+
+    /**
+     * Observer for the frames that leave the encoder, for host-app diagnostics.
+     *
+     * It exists so a host can show **what the watch will receive** — decode the JPEG and draw it — which
+     * is the only way to tell a working `PixelCopy` capture from one that returns black on a device. It
+     * runs on the pipeline thread before the chunks are written, so it must not block: copy what is
+     * needed and hand it to another thread. A throwing observer is contained, because killing the
+     * pipeline thread would end the stream.
+     */
+    @Volatile
+    var frameObserver: ((PipelineFrame) -> Unit)? = null
 
     private val counters = Counters()
     private var pipelineThread: Thread? = null
@@ -255,6 +268,7 @@ class MirrorPipeline(
             discontinuity = pendingDiscontinuity,
         )
         pendingDiscontinuity = false
+        notifyFrameObserver(frameId, encoded, chunked.chunkTotal)
 
         var sentChunks = 0
         for (chunk in chunked.frames) {
@@ -305,6 +319,16 @@ class MirrorPipeline(
         }
     }
 
+    private fun notifyFrameObserver(frameId: Long, encoded: EncodedFrame, chunkTotal: Int) {
+        val observer = frameObserver ?: return
+        try {
+            observer(PipelineFrame(frameId = frameId, encoded = encoded, chunkTotal = chunkTotal))
+        } catch (error: RuntimeException) {
+            // A diagnostic hook must never take down the stream.
+            lastError = "frame observer threw: ${error.message}"
+        }
+    }
+
     /** Mutable counters, kept private so [stats] can stay immutable. */
     private class Counters {
         val captured = AtomicLong()
@@ -332,4 +356,22 @@ class MirrorPipeline(
         /** Width of the frame-rate averaging window. */
         const val RATE_WINDOW_MS: Long = 1_000L
     }
+}
+
+/**
+ * One encoded frame as it leaves the pipeline, for host-app diagnostics.
+ *
+ * @property frameId pipeline-assigned id, the same value carried by the frame's `VIDEO` chunks.
+ * @property encoded the coded frame; `encoded.data` is the JPEG on Profile A.
+ * @property chunkTotal how many `VIDEO` chunks this frame was split into.
+ */
+class PipelineFrame(
+    val frameId: Long,
+    val encoded: EncodedFrame,
+    val chunkTotal: Int,
+) {
+
+    override fun toString(): String =
+        "PipelineFrame(#$frameId ${encoded.width}x${encoded.height} ${encoded.sizeBytes}B, " +
+            "chunks=$chunkTotal)"
 }

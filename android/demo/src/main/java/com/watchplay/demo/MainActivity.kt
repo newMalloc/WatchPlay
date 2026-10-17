@@ -7,16 +7,21 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -26,6 +31,7 @@ import com.watchplay.sdk.capture.PixelCopyCapture
 import com.watchplay.sdk.encoder.EncodeProfile
 import com.watchplay.sdk.encoder.MjpegEncoder
 import com.watchplay.sdk.pipeline.PipelineConfig
+import com.watchplay.sdk.pipeline.PipelineFrame
 import com.watchplay.sdk.pipeline.PipelineStats
 import com.watchplay.sdk.render.UIRenderModule
 import com.watchplay.sdk.render.WatchLayoutSpec
@@ -36,6 +42,7 @@ import com.watchplay.sdk.transport.BleGattTransport
 import com.watchplay.sdk.transport.LoopbackTransport
 import com.watchplay.sdk.transport.TransportModule
 import java.io.IOException
+import java.util.concurrent.Executors
 
 /**
  * WatchPlay demo: show a watch-sized WebView scene, then mirror it through the real SDK pipeline.
@@ -81,6 +88,9 @@ class MainActivity :
     private lateinit var statsView: TextView
     private lateinit var toggleButton: Button
     private lateinit var watchButton: Button
+    private lateinit var frameButton: Button
+    private lateinit var previewView: ImageView
+    private lateinit var previewLabel: TextView
 
     private var client: WatchPlayClient? = null
     private var watchStub: DemoWatchStub? = null
@@ -88,6 +98,20 @@ class MainActivity :
     private lateinit var scanner: BleWatchScanner
 
     private val handler = Handler(Looper.getMainLooper())
+
+    /** Decodes the JPEGs that leave the encoder; never on the pipeline thread. */
+    private val previewExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "watchplay-preview").apply { isDaemon = true }
+    }
+
+    /** Reused decode target, so a 4 fps preview does not allocate a bitmap per frame. */
+    private var previewBitmap: Bitmap? = null
+    private var lastPreviewAtMs = 0L
+    private var previewExpanded = false
+
+    @Volatile
+    private var lastFrame: PipelineFrame? = null
+
     private var lastStats: PipelineStats = PipelineStats()
     private var lastState: SessionState = SessionState.IDLE
     private var lastError: String? = null
@@ -108,6 +132,9 @@ class MainActivity :
         statsView = findViewById(R.id.stats)
         toggleButton = findViewById(R.id.toggle)
         watchButton = findViewById(R.id.watch)
+        frameButton = findViewById(R.id.frame_toggle)
+        previewView = findViewById(R.id.frame_preview)
+        previewLabel = findViewById(R.id.frame_label)
         scanner = BleWatchScanner(this)
 
         sceneView = createSceneWebView()
@@ -115,6 +142,8 @@ class MainActivity :
         render.attach(sceneView)
         findViewById<FrameLayout>(R.id.scene_container).addView(
             sceneView,
+            // Index 0: the preview sits above the scene, which is what "expanded" shows instead of it.
+            0,
             // Laid out at the panel's pixel size, so the captured bitmap and the encoded frame are the
             // size the watch negotiated: a 466 px WebView under a density-160 context is a 466 CSS px
             // viewport, and `1vmin` in the scene is then exactly 1% of the panel (06-rendering.md §3.2).
@@ -127,11 +156,17 @@ class MainActivity :
             if (client == null) startLoopbackMirroring() else stopMirroring()
         }
         watchButton.setOnClickListener { connectToWatch() }
+        frameButton.setOnClickListener { togglePreviewSize() }
+
+        // Start on the loopback link: the point of this APK is to show the picture that would be sent,
+        // and that needs no second device and no permissions.
+        startLoopbackMirroring()
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(statsTicker)
         unregisterReceiver(batteryReceiver)
+        previewExecutor.shutdownNow()
         scanner.stop()
         stopMirroring()
         // The module owns the WebView; it destroys it on the handler.
@@ -243,6 +278,7 @@ class MainActivity :
                 ),
             )
             .listener(this)
+            .frameObserver { frame -> previewFrame(frame) }
             .build()
 
         client = newClient
@@ -256,6 +292,109 @@ class MainActivity :
         sceneStatus = "waiting for CAPS_ACK"
         handler.removeCallbacks(statsTicker)
         handler.post(statsTicker)
+    }
+
+    // ---------------------------------------------------------------- frame preview
+
+    /**
+     * Draws the frame that just left the encoder — the picture the watch will decode.
+     *
+     * This is also the only honest check on the capture path: `PixelCopy` reads what the window
+     * composited, and on some devices the WebView is composited elsewhere, so the frame arrives black.
+     * The preview says so instead of leaving a puzzling blank screen on the watch.
+     *
+     * Decoding runs on [previewExecutor] because this callback arrives on the pipeline thread, where a
+     * 466×466 JPEG decode would delay the next capture.
+     */
+    private fun previewFrame(frame: PipelineFrame) {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastPreviewAtMs < PREVIEW_PERIOD_MS) return
+        lastPreviewAtMs = now
+        lastFrame = frame
+        val jpeg = frame.encoded.data
+        previewExecutor.execute {
+            val decoded = decode(jpeg) ?: return@execute
+            val blank = looksBlank(decoded)
+            handler.post {
+                if (isFinishing || isDestroyed) return@post
+                previewView.setImageBitmap(decoded)
+                previewView.invalidate()
+                previewView.visibility = View.VISIBLE
+                previewLabel.visibility = View.VISIBLE
+                previewLabel.text = if (blank) {
+                    getString(R.string.frame_black)
+                } else {
+                    getString(
+                        R.string.frame_label,
+                        frame.frameId,
+                        frame.encoded.width,
+                        frame.encoded.height,
+                        "${jpeg.size / 1024} kB",
+                        frame.chunkTotal,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Decodes into the bitmap from the previous frame when possible.
+     *
+     * At [PREVIEW_PERIOD_MS] a fresh 466×466 ARGB bitmap would be ~870 kB of garbage per update, which is
+     * pointless churn on a phone that is already encoding 10 frames a second.
+     */
+    private fun decode(jpeg: ByteArray): Bitmap? {
+        val options = BitmapFactory.Options().apply {
+            inMutable = true
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            previewBitmap?.takeIf { !it.isRecycled }?.let { inBitmap = it }
+        }
+        return try {
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, options)?.also { previewBitmap = it }
+        } catch (error: IllegalArgumentException) {
+            // Reuse is refused when the frame size changed; decode once without a target.
+            previewBitmap = null
+            BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, BitmapFactory.Options())
+        }
+    }
+
+    /** `true` when the frame carries almost no light, which is what a broken capture produces. */
+    private fun looksBlank(bitmap: Bitmap): Boolean {
+        var total = 0L
+        var samples = 0
+        var y = 0
+        while (y < bitmap.height) {
+            var x = 0
+            while (x < bitmap.width) {
+                val pixel = bitmap.getPixel(x, y)
+                // Rec. 601 luma, integer arithmetic: 30/59/11 out of 100.
+                val luma = ((pixel shr 16 and 0xFF) * 30 + (pixel shr 8 and 0xFF) * 59 + (pixel and 0xFF) * 11) / 100
+                total += luma
+                samples++
+                x += LUMA_SAMPLE_STEP_PX
+            }
+            y += LUMA_SAMPLE_STEP_PX
+        }
+        return samples > 0 && total / samples < BLANK_LUMA_THRESHOLD
+    }
+
+    /** Switches between the corner thumbnail and the frame at 1:1 over the scene. */
+    private fun togglePreviewSize() {
+        previewExpanded = !previewExpanded
+        val margin = (8 * resources.displayMetrics.density).toInt()
+        previewView.layoutParams = if (previewExpanded) {
+            FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER)
+        } else {
+            FrameLayout.LayoutParams(
+                (THUMBNAIL_DP * resources.displayMetrics.density).toInt(),
+                (THUMBNAIL_DP * resources.displayMetrics.density).toInt(),
+                Gravity.BOTTOM or Gravity.END,
+            ).apply { setMargins(margin, margin, margin, margin) }
+        }
+        previewView.scaleType = ImageView.ScaleType.FIT_CENTER
+        frameButton.text = getString(
+            if (previewExpanded) R.string.frame_preview_full else R.string.frame_preview,
+        )
     }
 
     // ---------------------------------------------------------------- BLE discovery
@@ -345,6 +484,12 @@ class MainActivity :
             append("link: ").append(linkLabel).append('\n')
             append("scene: ").append(sceneStatus).append('\n')
             append("paint requests: ").append(paintRequests).append('\n')
+            lastFrame?.let { frame ->
+                append("sent frame: #").append(frame.frameId)
+                    .append(' ').append(frame.encoded.width).append('x').append(frame.encoded.height)
+                    .append(' ').append(frame.encoded.sizeBytes).append(" B / ")
+                    .append(frame.chunkTotal).append(" chunks\n")
+            }
             append("negotiated: ")
             append(client?.negotiated?.let { "${it.codec.displayName} ${it.widthPx}x${it.heightPx} " +
                 "@${it.targetFps}fps q=${it.quality} chunk=${it.maxChunkBytes} credits=${it.initialCredits}" }
@@ -384,6 +529,18 @@ class MainActivity :
         private const val SCAN_TIMEOUT_MS = 8_000L
 
         private const val REQUEST_BLUETOOTH = 1
+
+        /** How often the preview decodes a frame; the stream itself runs at 10 fps. */
+        private const val PREVIEW_PERIOD_MS = 250L
+
+        /** Thumbnail edge in dp; tapping the button shows the frame at 1:1 instead. */
+        private const val THUMBNAIL_DP = 112
+
+        /** Sampling stride for the blank-frame check: 466/16 is about 30×30 samples. */
+        private const val LUMA_SAMPLE_STEP_PX = 16
+
+        /** Mean luma below this (0..255) means the frame carries no visible content. */
+        private const val BLANK_LUMA_THRESHOLD = 4
 
         /**
          * The panel the demo renders for. `WebViewRenderModule` refuses a layout that differs from the one
