@@ -36,7 +36,7 @@ A 是基线，B 是省带宽的可选项。哪一档由协商按硬件能力决�
 
 | 承载 | 适用设备 | 状态 |
 | :--- | :--- | :--- |
-| BLE GATT | 基线，任何支持 BLE 的设备 | SDK 骨架，`open()` 未接通 |
+| BLE GATT | 基线，任何支持 BLE 的设备 | 已实现（SDK + `android/sink`），未真机联调 |
 | BLE L2CAP CoC | 手机 Android 10+，开销低于 GATT | SDK 骨架，`open()` 未接通 |
 | 经典蓝牙 RFCOMM (SPP) | 只有 BR/EDR、没有可用 BLE 的设备 | 规范已定，未实现 |
 | Wi-Fi TCP | 需要高码率的场景 | 规范已定，未实现 |
@@ -59,7 +59,8 @@ docs/
   guides/                  使用指南
 android/
   sdk/                     手机端 Kotlin SDK（com.watchplay.sdk）
-  demo/                    示例 App
+  demo/                    示例 App：loopback 演示 + BLE 扫描连接
+  sink/                    手表端参考 App：GATT server、JPEG 解码、触控回传
 watch/                     手表端参考架构（文档；示例硬件 ESP32-S3）
 tools/                    协议参考实现与校验工具（仅标准库）
 examples/
@@ -80,7 +81,7 @@ python tools/lint_scenes.py          # 示例场景符合渲染规范
 python tools/check_doc_links.py      # 文档交叉引用与锚点
 ```
 
-Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.md)。
+Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.md)，其中有一节讲怎么用两台 Android 设备跑通真实链路。
 
 ## 路线图
 
@@ -93,7 +94,7 @@ Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.m
 
 | 里程碑 | 交付物 | 状态 |
 | :--- | :--- | :--- |
-| M1 | MJPEG 投屏 Demo | 协议规范 v0.1 已完成；真机 Demo 未开始 |
+| M1 | MJPEG 投屏 Demo | 手机端 SDK 与手表端 App 已实现（92 项 JVM 测试），未真机联调 |
 | M2 | 地图导航 + 音乐播放 | 场景骨架已就位，未跑通 |
 | M3 | H.264 + Wi-Fi 通道 | Wi-Fi 与经典蓝牙承载：规范已定，无实现；H.264：编码器是桩，且无硬解参考硬件 |
 | M4 | Android SDK | 可构建（67 项 JVM 测试），未发布 |

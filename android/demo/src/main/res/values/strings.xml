@@ -3,5 +3,11 @@
     <string name="app_name">WatchPlay demo</string>
     <string name="start_mirroring">Start mirroring</string>
     <string name="stop_mirroring">Stop mirroring</string>
+    <string name="connect_watch">Connect to watch (BLE)</string>
+    <string name="scanning_watches">Scanning…</string>
+    <string name="no_watches">No WatchPlay sink found. Is the sink app advertising?</string>
+    <string name="pick_watch">Pick a watch sink</string>
+    <string name="bluetooth_needed">Bluetooth permissions are required to scan for a watch.</string>
+    <string name="bluetooth_unavailable">Bluetooth is off or unavailable on this device.</string>
     <string name="stats_placeholder">Pipeline stats appear here once mirroring starts.</string>
 </resources>

@@ -128,7 +128,7 @@
 | 不支持经典蓝牙 | 无 A2DP，也没有 BR/EDR 数据链路 | 参考实现只能走 BLE，音频由手机本地播放 |
 | H.264 只能软解 | `hardware_decode = 0`，`max_fps = 8` | `Negotiator` 不会选 Profile B |
 | 参考接线只做单点触控 | FT3168 支持多点，参考实现只上报一个 `pointer_id` | 复杂手势不可用 |
-| 手机端 BLE 传输是骨架 | `BleGattTransport` / `BleL2capTransport` 有状态机、Credit 与 MTU 记账，`open()` 直接报错 | 目前只有 `LoopbackTransport` 能跑，与任何真表都连不上 |
+| L2CAP CoC 传输是骨架 | `BleL2capTransport` 有状态机与 Credit 记账，`open()` 直接报错 | 只能走 GATT，拿不到 CoC 的吞吐 |
 
 ---
 

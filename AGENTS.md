@@ -17,7 +17,8 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 | `docs/guides/` | Usage guide |
 | `tools/` | Executable reference implementation, tests, linters (stdlib only) |
 | `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
-| `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app |
+| `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app (loopback demo + BLE scan/connect) |
+| `android/sink` | Watch-side app for a second Android device: GATT server, JPEG decode, touch back |
 | `watch/docs/` | Watch-side reference architecture for one board. Documentation only, no firmware source |
 
 ## Commands
@@ -37,7 +38,8 @@ After editing `docs/diagrams/*.mmd`:
 python tools/render_diagrams.py      # the only script that needs the network
 ```
 
-Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test`, JDK 17 + SDK 34.
+Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (92 JVM tests), plus
+`:demo:assembleDebug` and `:sink:assembleDebug` for the two apps. JDK 17 + SDK 34.
 
 ## Changes that must travel together
 

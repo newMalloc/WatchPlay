@@ -1,6 +1,10 @@
 package com.watchplay.demo
 
+import android.Manifest
+import android.app.AlertDialog
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,7 +15,9 @@ import android.webkit.WebView
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.watchplay.sdk.WatchPlayClient
 import com.watchplay.sdk.capture.PixelCopyCapture
 import com.watchplay.sdk.encoder.MjpegEncoder
@@ -20,7 +26,9 @@ import com.watchplay.sdk.pipeline.PipelineConfig
 import com.watchplay.sdk.pipeline.PipelineStats
 import com.watchplay.sdk.session.SessionConfig
 import com.watchplay.sdk.session.SessionState
+import com.watchplay.sdk.transport.BleGattTransport
 import com.watchplay.sdk.transport.LoopbackTransport
+import com.watchplay.sdk.transport.TransportModule
 
 /**
  * WatchPlay demo: show a watch-sized WebView scene, then mirror it through the real SDK pipeline.
@@ -54,9 +62,12 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
     private lateinit var sceneView: WebView
     private lateinit var statsView: TextView
     private lateinit var toggleButton: Button
+    private lateinit var watchButton: Button
 
     private var client: WatchPlayClient? = null
     private var watchStub: DemoWatchStub? = null
+    private var linkLabel: String = "none"
+    private lateinit var scanner: BleWatchScanner
 
     private val handler = Handler(Looper.getMainLooper())
     private var lastStats: PipelineStats = PipelineStats()
@@ -76,6 +87,8 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
 
         statsView = findViewById(R.id.stats)
         toggleButton = findViewById(R.id.toggle)
+        watchButton = findViewById(R.id.watch)
+        scanner = BleWatchScanner(this)
         sceneView = createSceneWebView()
         findViewById<FrameLayout>(R.id.scene_container).addView(
             sceneView,
@@ -87,15 +100,27 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
         sceneView.loadUrl(SCENE_URL)
 
         toggleButton.setOnClickListener {
-            if (client == null) startMirroring() else stopMirroring()
+            if (client == null) startLoopbackMirroring() else stopMirroring()
         }
+        watchButton.setOnClickListener { connectToWatch() }
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(statsTicker)
+        scanner.stop()
         stopMirroring()
         sceneView.destroy()
         super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_BLUETOOTH) return
+        if (scanner.hasPermissions()) {
+            scanForWatches()
+        } else {
+            Toast.makeText(this, R.string.bluetooth_needed, Toast.LENGTH_LONG).show()
+        }
     }
 
     /**
@@ -124,14 +149,33 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
         return webView
     }
 
-    private fun startMirroring() {
-        // A loopback pair: `phone` is the SDK's link, `watch` is the scripted Sink.
+    /**
+     * The radio-free path: a loopback pair where `phone` is the SDK's link and `watch` is the scripted
+     * sink. Useful because it needs no second device and no permissions.
+     */
+    private fun startLoopbackMirroring() {
         val (phone, watch) = LoopbackTransport.pair(phoneId = "demo-phone", watchId = "demo-watch")
         val stub = DemoWatchStub(watch)
-        watchStub = stub
         stub.start()
+        linkLabel = "loopback (scripted watch)"
+        startMirroring(phone, stub)
+    }
 
-        val newClient = WatchPlayClient.builder(phone)
+    /**
+     * The real path: [BleGattTransport] to a device that advertises the WatchPlay service — typically
+     * the `:sink` app on a second Android device.
+     */
+    private fun startBleMirroring(watch: BleWatchScanner.Found) {
+        val transport = BleGattTransport(this, watch.device)
+        watchStub = null
+        linkLabel = "BLE ${watch.name} (${watch.address})"
+        startMirroring(transport)
+    }
+
+    private fun startMirroring(transport: TransportModule, stub: DemoWatchStub? = null) {
+        stopMirroring()
+        watchStub = stub
+        val newClient = WatchPlayClient.builder(transport)
             .captureModule(PixelCopyCapture(PixelCopyCapture.Source.FromView(sceneView, window)))
             .encoderModule(MjpegEncoder())
             .sessionConfig(
@@ -158,6 +202,41 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
         lastError = null
         handler.removeCallbacks(statsTicker)
         handler.post(statsTicker)
+    }
+
+    // ---------------------------------------------------------------- BLE discovery
+
+    private fun connectToWatch() {
+        if (!scanner.isAvailable()) {
+            Toast.makeText(this, R.string.bluetooth_unavailable, Toast.LENGTH_LONG).show()
+            return
+        }
+        val missing = scanner.requiredPermissions().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) {
+            requestPermissions(missing.toTypedArray(), REQUEST_BLUETOOTH)
+            return
+        }
+        scanForWatches()
+    }
+
+    private fun scanForWatches() {
+        watchButton.isEnabled = false
+        watchButton.text = getString(R.string.scanning_watches)
+        scanner.scan(SCAN_TIMEOUT_MS) { found ->
+            watchButton.isEnabled = true
+            watchButton.text = getString(R.string.connect_watch)
+            if (found.isEmpty()) {
+                Toast.makeText(this, R.string.no_watches, Toast.LENGTH_LONG).show()
+                return@scan
+            }
+            val labels = found.map { "${it.name}  ${it.address}  ${it.rssi} dBm" }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle(R.string.pick_watch)
+                .setItems(labels) { _, index -> startBleMirroring(found[index]) }
+                .show()
+        }
     }
 
     private fun stopMirroring() {
@@ -192,6 +271,7 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
         val client = this.client
         val text = buildString {
             append("session: ").append(lastState.name).append('\n')
+            append("link: ").append(linkLabel).append('\n')
             append("negotiated: ")
             append(client?.negotiated?.let { "${it.codec.displayName} ${it.widthPx}x${it.heightPx} " +
                 "@${it.targetFps}fps q=${it.quality} chunk=${it.maxChunkBytes} credits=${it.initialCredits}" }
@@ -223,5 +303,10 @@ class MainActivity : AppCompatActivity(), WatchPlayClient.Listener {
 
         /** The scene ships in the APK's assets, so it loads with zero network requests. */
         private const val SCENE_URL = "file:///android_asset/demo_scene.html"
+
+        /** How long the watch scan runs before the chooser appears. */
+        private const val SCAN_TIMEOUT_MS = 8_000L
+
+        private const val REQUEST_BLUETOOTH = 1
     }
 }

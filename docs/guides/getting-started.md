@@ -152,7 +152,7 @@ sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 
 ```pwsh
 cd android
-./gradlew :sdk:test          # 协议逻辑单元测试，不需要设备
+./gradlew :sdk:test          # 92 项协议逻辑单元测试，不需要设备
 ./gradlew :sdk:assembleDebug
 ```
 
@@ -172,6 +172,27 @@ cd android
 - 因为走的是 loopback，`latency` 只反映管线内部开销，不含蓝牙
 
 **这一步能验证**：WebView 渲染是否正常、OpenGL 捕获是否出图、编码器是否初始化成功、分块与 Credit 逻辑是否自洽。**不能验证**：真实蓝牙吞吐与手表解码性能。
+
+### 用第二台 Android 设备当手表（真实 BLE 链路）
+
+`sink` 模块就是手表那一端：它开一个 GATT server、广播 WatchPlay 服务、重组视频帧、把 JPEG 解出来显示，并把触摸回传。两台 Android 设备就能跑真实射频链路，不必先有手表硬件。
+
+```pwsh
+cd android
+./gradlew :sink:installDebug      # 装在"手表"那台
+./gradlew :demo:installDebug      # 装在手机那台
+```
+
+| 端 | 操作 | 期望 |
+| :--- | :--- | :--- |
+| 手表那台 | 打开 **WatchPlay Sink**，授予蓝牙权限（CONNECT + ADVERTISE） | 状态栏显示 `advertising as a 480px round sink`，链路 `OPENING` |
+| 手机那台 | 打开 Demo，点 **Connect to watch (BLE)**，授予扫描/连接权限 | 8 秒内弹出设备列表 |
+| 手机那台 | 选中列表里的 sink | 会话进入 `STREAMING`，状态区出现 `link: BLE …` |
+| 手表那台 | 屏幕上出现镜像画面，点它 | 手机端 WebView 的场景响应触摸 |
+
+**这条路径能验证**：真实 MTU 协商、`bearer_tu` 分片、CCCD 订阅、Credit 往返、JPEG 解码与触控回传。**不能验证**：真手表芯片的解码性能与功耗，那要等第 3 步的板子。
+
+sink 刻意做得简单：480 px 圆屏、只解 JPEG（`BitmapFactory` 没有 H.264）、单点触控。
 
 ---
 
@@ -224,8 +245,8 @@ I (1120) WP_VIDEO: frame 0 presented (te=1)
 
 ## 第 4 步：端到端联调
 
-1. 手表上电，确认在广播（`WatchPlay-TDisp`）。
-2. 手机打开 Demo App，扫描并连接该设备。
+1. 手表上电，确认在广播（`WatchPlay-TDisp`）；或装 `sink` 的第二台 Android 设备在广播。
+2. 手机打开 Demo App，点 **Connect to watch (BLE)**，扫描并连接该设备。
 3. 观察手表屏幕出现画面，触摸屏幕，确认手机端 UI 有反应。
 
 ### 该测什么
