@@ -26,7 +26,7 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 Python 3.10+, no third-party packages:
 
 ```pwsh
-python tools/test_protocol.py        # 48 tests; also runs the doc link check
+python tools/test_protocol.py        # 49 tests; also runs the doc link check
 python tools/gen_traces.py --check   # committed traces match the generator
 python tools/lint_scenes.py          # examples/watch-ui obeys the rendering spec
 python tools/check_doc_links.py      # relative links and anchors
@@ -39,7 +39,7 @@ python tools/render_diagrams.py      # the only script that needs the network
 ```
 
 Android lives in `android/`: `./gradlew :sdk:assembleDebug :sdk:test` (122 JVM tests) and
-`./gradlew :demo:test` (12 more, the demo app's data contract), plus `:demo:assembleDebug` and
+`./gradlew :demo:test` (16 more, the demo app's data contract), plus `:demo:assembleDebug` and
 `:sink:assembleDebug` for the two apps. JDK 17 + SDK 34.
 
 ## Changes that must travel together

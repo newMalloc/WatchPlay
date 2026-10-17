@@ -152,7 +152,7 @@ sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 
 ```pwsh
 cd android
-./gradlew :sdk:test          # 118 项协议逻辑单元测试，不需要设备
+./gradlew :sdk:test          # 122 项协议逻辑单元测试，不需要设备
 ./gradlew :sdk:assembleDebug
 ```
 
@@ -190,9 +190,11 @@ cd android
 
 | 谁 | 做了什么 |
 | :--- | :--- |
-| 手机 App | 读曲库标签（标题、歌手）、持有 `MediaPlayer`、每 250 ms 采样播放位置，每秒把 `title`/`artist`/`playing`/`progress` 推给场景 |
-| 场景 | 只画：标题一行截断、播放/暂停字形、进度条宽度 = `progress × 100%`。它自己不算时间也不做动画 |
+| 手机 App | 读曲库标签（标题、歌手）与内嵌封面、持有 `MediaPlayer`、每 250 ms 采样播放位置，每秒把 `title`/`artist`/`playing`/`progress` 推给场景 |
+| 场景 | 只画：封面圆盘、标题一行截断、播放/暂停字形、进度条宽度 = `progress × 100%`。它自己不算时间也不做动画 |
 | 播控 | 点手表上的三键 → `TOUCH` → 原生 `MotionEvent` → 场景的 click → `window.watchplayHost.onControl("play")` → App 调 `MediaPlayer`。命中判定留在场景里（7 mm 目标在那儿），App 不复制几何 |
+
+封面是真封面，不是渐变：`MediaMetadataRetriever.embeddedPicture` 取曲目的内嵌图，居中裁方后缩到 96×96、质量 80，编成 `data:image/jpeg;base64,…`（实测 2.4 kB）。**必须是 `data:` URI**——场景跑在 `blockNetworkLoads = true` 下，`content://` 与 `http://` 的图会被直接拒掉。手机只在换歌时推一次，场景侧的 `setCover()` 自己去重；曲目没有内嵌图时推空串，场景退回 `conic-gradient` 的黑胶纹。
 
 音频**不上手表**：BLE 没有 A2DP 通路，`00-overview.md` §6 也是这么定的——手表只是遥控器。
 

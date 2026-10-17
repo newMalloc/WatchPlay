@@ -1,5 +1,6 @@
 package com.watchplay.demo
 
+import android.util.Log
 import android.webkit.JavascriptInterface
 
 /**
@@ -17,6 +18,13 @@ class SceneBridge(private val onControl: (String) -> Unit) {
 
     @JavascriptInterface
     fun onControl(control: String) {
+        // The bridge is reflection: a silent no-op here is indistinguishable from a scene that never
+        // clicked, so the one line that proves the wiring is worth keeping.
+        Log.i(TAG, "bridge: onControl($control)")
         onControl(control)
+    }
+
+    private companion object {
+        const val TAG = "WatchPlayBridge"
     }
 }

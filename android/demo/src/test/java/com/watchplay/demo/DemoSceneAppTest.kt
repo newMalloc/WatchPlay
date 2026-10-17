@@ -1,5 +1,7 @@
 package com.watchplay.demo
 
+import com.watchplay.sdk.apps.MirrorApp
+import com.watchplay.sdk.render.SceneUpdate
 import com.watchplay.sdk.render.WatchLayoutSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -149,11 +151,57 @@ class DemoSceneAppTest {
         assertEquals(listOf("toggle", "next", "previous"), music.calls)
     }
 
+    @Test
+    fun `the album art is pushed once instead of once per second`() {
+        val music = FakeMusic(cover = COVER)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+
+        val first = app.pollUpdate(1_000L)?.data ?: error("no update")
+        val second = app.pollUpdate(2_000L)?.data ?: error("no update")
+
+        assertEquals("\"$COVER\"", first["cover"])
+        assertNull("kilobytes of base64 must not travel every second", second["cover"])
+    }
+
+    @Test
+    fun `a track without art sends an empty string so the scene can clear the old one`() {
+        val music = FakeMusic(cover = null)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+
+        val data = app.pollUpdate(1_000L)?.data ?: error("no update")
+
+        assertEquals("\"\"", data["cover"])
+    }
+
+    @Test
+    fun `a new track's art is pushed again`() {
+        val music = FakeMusic(cover = null)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+        app.pollUpdate(1_000L)
+
+        music.cover = COVER
+
+        assertEquals("\"$COVER\"", app.pollUpdate(2_000L)?.data?.get("cover"))
+    }
+
+    @Test
+    fun `a restarted session pushes the art into the reloaded document`() {
+        val music = FakeMusic(cover = COVER)
+        val app = DemoSceneApp(html = "<html></html>", music = music, wallClock = { fixedWall }, zone = ZONE)
+        app.pollUpdate(1_000L)
+
+        // The scene document was reloaded, so its copy of the art went with it.
+        app.onStart(FakeHost())
+
+        assertEquals("\"$COVER\"", app.pollUpdate(2_000L)?.data?.get("cover"))
+    }
+
     private class FakeMusic(
         override val title: String = "Track",
         override val artist: String = "Artist",
         override val isPlaying: Boolean = false,
         override val progress: Float = 0f,
+        override var cover: String? = null,
     ) : DemoMusic {
         val calls = mutableListOf<String>()
 
@@ -171,6 +219,21 @@ class DemoSceneAppTest {
         override fun previous() {
             calls += "previous"
         }
+    }
+
+    private class FakeHost : MirrorApp.Host {
+        override val layout: WatchLayoutSpec = WatchLayoutSpec.round()
+
+        override fun postUpdate(update: SceneUpdate) = Unit
+
+        override fun requestFrame() = Unit
+
+        override fun sendControl(opcode: Int, vararg parameters: Int) = Unit
+    }
+
+    private companion object {
+        /** Shape of a real one: a scheme prefix plus base64, long enough to matter. */
+        const val COVER = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ=="
     }
 
     private fun metresOf(value: String): Int =

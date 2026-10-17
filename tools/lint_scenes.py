@@ -47,6 +47,9 @@ FORBIDDEN_URL_ATTRS = re.compile(
 EXTERNAL_SCHEME = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
 BLOCKED_TAGS = ("<img", "<video", "<audio", "<iframe", "<object", "<embed", "<link")
 
+#: `<script>` bodies are JavaScript, not markup or style rules; see ``lint_scene``.
+SCRIPT_BLOCK = re.compile(r"<script\b[^>]*>.*?</script\s*>", re.IGNORECASE | re.DOTALL)
+
 VMIN_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*vmin\b")
 PX_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*px\b")
 SAFE_PROP_NAMES = ("--wp-safe-inset", "--safe-inset", "--safe-area-inset")
@@ -97,12 +100,17 @@ def lint_scene(path: Path) -> tuple[list[str], list[str]]:
     """Return (errors, warnings) for one scene file."""
     errors: list[str] = []
     warnings: list[str] = []
-    text = path.read_text(encoding="utf-8", errors="replace")
+    document = path.read_text(encoding="utf-8", errors="replace")
+    document_lower = document.lower()
+    # A `<script>` body is JavaScript, where `url(...)` may be assembled from data that only exists at
+    # runtime (the phone pushing album art as a `data:` URI). No stylesheet fetched it, so the CSS
+    # checks below run on the document with its scripts removed; the tag checks still see everything.
+    text = SCRIPT_BLOCK.sub("", document)
     lower = text.lower()
 
     # --- external resources ------------------------------------------------
     for tag in BLOCKED_TAGS:
-        if tag in lower and tag != "<link":
+        if tag in document_lower and tag != "<link":
             errors.append(f"uses {tag}>; scenes must be fully self-contained (spec 06 section 3.7)")
     for match in FORBIDDEN_URL_ATTRS.finditer(text):
         url = match.group(1).strip()
@@ -176,8 +184,8 @@ def lint_scene(path: Path) -> tuple[list[str], list[str]]:
     # --- scrolling / zoom ---------------------------------------------------
     if not re.search(r"overflow\s*:\s*hidden", text, re.IGNORECASE):
         errors.append("does not set overflow: hidden; scrolling breaks touch mapping")
-    if "viewport" in lower:
-        meta = re.search(r'<meta[^>]*name=["\']viewport["\'][^>]*>', text, re.IGNORECASE)
+    if "viewport" in document_lower:
+        meta = re.search(r'<meta[^>]*name=["\']viewport["\'][^>]*>', document, re.IGNORECASE)
         if meta and "user-scalable=no" not in meta.group(0).replace(" ", "").lower():
             warnings.append("viewport meta does not set user-scalable=no")
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -509,6 +510,33 @@ class TestExampleScenes(unittest.TestCase):
             errors, _warnings = lint_scenes.lint_scene(scene)
             self.assertEqual(errors, [], f"{scene.name} violates the rendering spec: {errors}")
 
+    def test_a_script_may_build_a_css_url_at_runtime(self):
+        """`<script>` is JavaScript, not CSS: `url(...)` assembled there is not a fetch.
+
+        The demo scene sets album art with `style.backgroundImage = "url(" + value + ")"`,
+        where `value` is a `data:` URI pushed by the phone. No stylesheet requested that
+        resource, so the external-resource rule must not fire on it.
+        """
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import lint_scenes
+
+        document = (
+            "<!doctype html><html><head><style>"
+            ":root{ --wp-safe-inset:14vmin }"
+            "html,body{ background:#05070c; overflow:hidden }"
+            "</style></head><body>"
+            '<script>var slot = null; slot.style.backgroundImage = "url(" + value + ")";</script>'
+            "</body></html>"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as handle:
+            handle.write(document)
+            scene = Path(handle.name)
+        self.addCleanup(scene.unlink)
+
+        errors, _warnings = lint_scenes.lint_scene(scene)
+
+        self.assertEqual(errors, [])
+
 
 class TestDocumentation(unittest.TestCase):
     """The spec is only useful if its own cross-references work."""
@@ -545,6 +573,7 @@ class TestToolsAreStdlibOnly(unittest.TestCase):
         "struct",
         "subprocess",
         "sys",
+        "tempfile",
         "time",
         "typing",
         "unicodedata",

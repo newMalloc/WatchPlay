@@ -23,7 +23,7 @@
 
 | 文件 | 展示的规范要点 |
 | :--- | :--- |
-| [`demo-scene.html`](demo-scene.html) | 一个文档三个场景（表盘 / 音乐 / 导航），每页只给"另外两页"的入口，点击即切；安全区变量与圆屏/方屏形状兜底、方屏按钮放大、`conic-gradient` 封面、内联 SVG 路线、零外部资源 |
+| [`demo-scene.html`](demo-scene.html) | 一个文档三个场景（表盘 / 音乐 / 导航），每页只给"另外两页"的入口，点击即切；安全区变量与圆屏/方屏形状兜底、方屏按钮放大、专辑封面（手机推来的 `data:` URI，取不到就退回 `conic-gradient` 黑胶纹）、内联 SVG 路线、零外部资源 |
 | [`music-player.html`](music-player.html) | 安全区变量注入、`conic-gradient` 弧形进度条、圆屏/方屏自适应、触摸目标尺寸、纯状态更新不做动画 |
 
 切换页面的逻辑在场景里，不在协议里：点按由场景自己处理，没有网络回环。手机要主动切页时走 `SceneUpdate.javascript = "window.watchplay.go('map')"`（`MirrorApp.Host.postUpdate`）。

@@ -54,6 +54,9 @@ class DemoSceneApp(
     private var lastPushAtMs: Long = 0L
     private var routeStartedAtMs: Long = 0L
 
+    /** Art last pushed into the scene; `null` means "never pushed in this session". */
+    private var lastCoverPushed: String? = null
+
     override fun createScene(layout: WatchLayoutSpec): WatchScene = WatchScene(id = ID, html = html)
 
     /**
@@ -86,6 +89,14 @@ class DemoSceneApp(
             data["artist"] = quoted(player.artist)
             data["playing"] = player.isPlaying.toString()
             data["progress"] = String.format(Locale.ROOT, "%.3f", player.progress)
+            // The art is kilobytes of base64 that change only when the track does, so it goes out once.
+            // `applyUpdate` merges into `window.watchplay.data`, so the scene keeps the value; an empty
+            // string is a real change, not a missing key, and clears it.
+            val cover = player.cover.orEmpty()
+            if (cover != lastCoverPushed) {
+                data["cover"] = quoted(cover)
+                lastCoverPushed = cover
+            }
         }
 
         return SceneUpdate(
@@ -121,6 +132,8 @@ class DemoSceneApp(
         // A fresh start restarts the scripted route, so the demo is repeatable.
         routeStartedAtMs = 0L
         lastPushAtMs = 0L
+        // The document was just reloaded, so its copy of the art is gone with it.
+        lastCoverPushed = null
     }
 
     override fun onStop() = Unit

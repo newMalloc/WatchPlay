@@ -24,6 +24,16 @@ interface DemoMusic {
     /** Playback position as a fraction of the track duration, `0..1`. */
     val progress: Float
 
+    /**
+     * Album art for the current track as a `data:` URI, or `null` when it has none.
+     *
+     * A `data:` URI rather than a `content://` one because the scene runs under
+     * `blockNetworkLoads = true` (`06-rendering.md` §3.2) and cannot fetch anything: the phone fetches
+     * the picture, shrinks it to a thumbnail and hands the bytes over. The same rule `06-rendering.md`
+     * §3.6 states for fonts.
+     */
+    val cover: String?
+
     /** Why there is nothing to play when [available] is `false`; empty when it is. */
     val statusText: String
 

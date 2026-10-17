@@ -16,7 +16,9 @@
     * <html> 上的 data-screen-shape="round" 只是浏览器里的默认值，手机端会改写它（§3.2/§3.4）；
     * 一个文档同时服务圆屏与方屏：方屏四角没有裁切，可用宽度更多，所以切换按钮在那儿放大一号；
     * 背景不透明——JPEG 没有 alpha，透明会被编成黑色；
-    * 零外部请求：没有图片、字体、iframe、外链 CSS，图标全用 CSS 与内联 SVG；
+    * 零外部请求：没有外链图片、字体、iframe、外链 CSS，图标全用 CSS 与内联 SVG；专辑封面由手机
+      取好、缩到 96px、编成 data: URI 推过来，所以这一条不破（§3.2 的 blockNetworkLoads 会直接
+      拒掉 content:// 与 http:// 的图）；
     * 动效不短于 100 ms，因为捕获节奏约 10 fps。
 
   切页由场景自己完成（点按即切，没有网络回环）；手机也可以用 window.watchplay.go('music') 从外部切，
@@ -104,9 +106,11 @@ html,body{
 }
 .cover{
   width:16vmin; height:16vmin; border-radius:50%;
+  /* 兜底：没有封面时是一张黑胶纹。真封面由手机推来的 data: URI 顶掉这一层（见 setCover）。 */
   background:
     conic-gradient(from 0deg, #16233a 0 12%, #0d1522 12% 25%, #16233a 25% 37%, #0d1522 37% 50%,
                    #16233a 50% 62%, #0d1522 62% 75%, #16233a 75% 87%, #0d1522 87% 100%);
+  background-size:cover; background-position:center;
   border:.5vmin solid rgba(255,255,255,.10);
   display:flex; align-items:center; justify-content:center;
 }
@@ -114,6 +118,8 @@ html,body{
   width:7vmin; height:7vmin; border-radius:50%;
   background:var(--wp-accent); opacity:.85;
 }
+/* 有真封面时不要那颗装饰圆点：它盖在黑胶纹上是唱针，盖在专辑封面上就是一块污点。 */
+.cover[data-art="1"] i{ display:none; }
 .track{ display:flex; flex-direction:column; align-items:center; gap:.5vmin; width:88%; }
 /* 真实曲名可能很长（"歌名 - 歌手 & 合作者"），一行截断，别把三键挤出安全区。 */
 .track-title{
@@ -205,7 +211,8 @@ html,body{
 <section class="scene" id="music" data-scene="music">
   <div class="bg bg-music"></div>
   <div class="overlay">
-    <div class="cover"><i></i></div>
+    <!-- data-art 由手机推来的封面切换：0 是兜底黑胶纹，1 是真封面。 -->
+    <div class="cover" data-art="0"><i></i></div>
 
     <div class="track">
       <div class="track-title" id="track-title">夜航西飞</div>
@@ -325,6 +332,25 @@ html,body{
     if (el) el.textContent = String(value);
   }
 
+  // 专辑封面：手机用 data: URI 推来一张 96px 的 JPEG，铺满这个圆。
+  // 场景不自己取图——content:// 与 http:// 在 blockNetworkLoads 下会被直接拒掉（06-rendering.md §3.2）。
+  // 手机只在换歌时推一次，但 render() 每秒都会带着同一个值跑一遍，所以这里自己去重。
+  var coverSrc = null;
+
+  function setCover(value) {
+    if (value === coverSrc) return;
+    coverSrc = value;
+    var slot = document.querySelector("#music .cover");
+    if (!slot) return;
+    if (value) {
+      slot.style.backgroundImage = "url(\"" + value + "\")";
+      slot.dataset.art = "1";
+    } else {
+      slot.style.backgroundImage = "";
+      slot.dataset.art = "0";
+    }
+  }
+
   function render() {
     var d = window.watchplay.data || {};
     if (d.clock !== undefined) { setText("clock", d.clock); driven = true; }
@@ -337,6 +363,7 @@ html,body{
     setText("turn-street", d.road);
     setText("remaining", d.remaining);
     setText("eta", d.eta);
+    if (d.cover !== undefined) setCover(String(d.cover));
 
     // 播放进度与播放状态由手机推来：进度是 0..1 的比例，不是动画。
     if (d.progress !== undefined) {

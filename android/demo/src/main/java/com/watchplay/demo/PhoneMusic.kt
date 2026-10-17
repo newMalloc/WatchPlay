@@ -2,11 +2,16 @@ package com.watchplay.demo
 
 import android.content.ContentUris
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioAttributes
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -60,6 +65,9 @@ class PhoneMusic(private val context: Context) : DemoMusic {
     @Volatile
     private var trackProgress: Float = 0f
 
+    @Volatile
+    private var trackCover: String? = null
+
     init {
         // A quarter-second ticker keeps the watch's progress bar honest without letting `pollUpdate` read
         // `MediaPlayer.currentPosition` itself.
@@ -87,6 +95,9 @@ class PhoneMusic(private val context: Context) : DemoMusic {
 
     override val progress: Float
         get() = trackProgress
+
+    override val cover: String?
+        get() = trackCover
 
     override val statusText: String
         get() = if (state == State.READY) "" else title
@@ -183,6 +194,8 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         tracks.firstOrNull()?.let {
             trackTitle = it.title
             trackArtist = it.artist
+            // Art for the track the scene shows before anyone presses play.
+            trackCover = readCover(it)
         }
     }
 
@@ -193,6 +206,9 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         trackTitle = track.title
         trackArtist = track.artist
         trackProgress = 0f
+        // Cleared before the player is even built: showing the previous track's art under this track's
+        // name is worse than showing none for the few hundred milliseconds the fetch takes.
+        trackCover = null
         val created = MediaPlayer()
         try {
             created.setAudioAttributes(
@@ -215,6 +231,9 @@ class PhoneMusic(private val context: Context) : DemoMusic {
             created.start()
             player = created
             playing = true
+            // One assignment, after the title is already the new track's: the scene never shows last
+            // track's art next to this track's name.
+            trackCover = readCover(track)
         } catch (error: Exception) {
             Log.w(TAG, "cannot play ${track.uri}", error)
             created.release()
@@ -233,6 +252,83 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         }
         player = null
         playing = false
+    }
+
+    /**
+     * Reads the track's embedded picture as a `data:` URI, or `null` when it has none.
+     *
+     * A `content://` thumbnail cannot be handed to the scene: `06-rendering.md` §3.2 sets
+     * `blockNetworkLoads = true`, so the document makes no requests and the phone is the one that reads
+     * the picture. 96 px matches what the watch page draws (16vmin of a 466 px panel is 75 px), and a
+     * quality-80 JPEG that size is 2–6 kB of base64 — small enough to ride inside one state update,
+     * which is why the demo pushes it once per track instead of once per second.
+     *
+     * A missing picture is not an error: plenty of tracks have none, and the scene keeps its gradient
+     * disc for them.
+     */
+    private fun readCover(track: Track): String? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, track.uri)
+            val picture = retriever.embeddedPicture ?: return null
+            encodeThumbnail(picture)
+        } catch (error: Exception) {
+            // A corrupt picture must not cost the user their music.
+            Log.w(TAG, "no cover art for ${track.title}", error)
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "cannot release the metadata retriever", error)
+            }
+        }
+    }
+
+    /** Decodes an embedded picture down to [COVER_PX]² and returns it as a `data:` URI. */
+    private fun encodeThumbnail(picture: ByteArray): String? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(picture, 0, picture.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+        }
+        val decoded = BitmapFactory.decodeByteArray(picture, 0, picture.size, options) ?: return null
+        val thumbnail = squareThumbnail(decoded)
+        return try {
+            val jpeg = ByteArrayOutputStream(COVER_PX * COVER_PX)
+            if (!thumbnail.compress(Bitmap.CompressFormat.JPEG, COVER_QUALITY, jpeg)) return null
+            Log.i(TAG, "cover art: ${thumbnail.width}x${thumbnail.height} ${jpeg.size()} B JPEG")
+            COVER_PREFIX + Base64.encodeToString(jpeg.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            if (thumbnail !== decoded) thumbnail.recycle()
+            decoded.recycle()
+        }
+    }
+
+    /**
+     * Centre-crops [source] to a square and scales it to [COVER_PX].
+     *
+     * The watch shows the middle of the picture inside a circle anyway, so the crop loses nothing
+     * visible, and the scene's `object-fit: cover` then has no work left to do per frame.
+     */
+    private fun squareThumbnail(source: Bitmap): Bitmap {
+        val side = minOf(source.width, source.height)
+        val cropped = if (side == source.width && side == source.height) {
+            source
+        } else {
+            Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
+        }
+        val scaled = Bitmap.createScaledBitmap(cropped, COVER_PX, COVER_PX, true)
+        if (cropped !== source && cropped !== scaled) cropped.recycle()
+        return scaled
+    }
+
+    /** Power-of-two subsample that still leaves 2× [COVER_PX] to scale down from. */
+    private fun sampleSizeFor(width: Int, height: Int): Int {
+        var sample = 1
+        while (maxOf(width, height) / (sample * 2) >= COVER_PX * 2) sample *= 2
+        return sample
     }
 
     private fun refreshProgress() {
@@ -266,5 +362,14 @@ class PhoneMusic(private val context: Context) : DemoMusic {
 
         /** Enough for a demo picker without holding a huge cursor. */
         private const val MAX_TRACKS = 200
+
+        /** Album-art edge in pixels; the scene draws it at ~75 px on a 466 px panel. */
+        private const val COVER_PX = 96
+
+        /** JPEG quality for the art: at 96 px the difference above 80 is invisible, the bytes are not. */
+        private const val COVER_QUALITY = 80
+
+        /** Scheme the scene needs, since it cannot fetch anything itself. */
+        private const val COVER_PREFIX = "data:image/jpeg;base64,"
     }
 }
