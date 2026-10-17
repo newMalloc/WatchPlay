@@ -115,7 +115,14 @@ class BleGattTransport internal constructor(
     override val availableCreditChunks: Int
         get() = credit.get()
 
-    /** Largest payload one ATT write can carry at the negotiated MTU: what becomes `max_chunk_bytes`. */
+    /**
+     * Largest payload one ATT write can carry at the negotiated MTU — what `max_chunk_bytes` may not
+     * exceed (`01-transport.md` §2.2 step 4).
+     */
+    override val maxChunkPayloadBytes: Int
+        get() = bearerTu
+
+    /** `MTU − 3`: the fragmentation granularity of every outbound frame. */
     val bearerTu: Int
         get() = if (negotiatedMtu >= ProtocolLimits.MIN_ATT_MTU) {
             AttFraming.bearerTu(negotiatedMtu)

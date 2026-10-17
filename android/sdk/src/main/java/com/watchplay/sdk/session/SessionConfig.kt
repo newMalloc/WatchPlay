@@ -19,8 +19,9 @@ import com.watchplay.sdk.protocol.ProtocolLimits
  *   `03-session.md` §4.2 step 2a only selects H.264 when the watch reports **hardware** decoding.
  * @property maxChunkBytesCeiling phone-side ceiling for `max_chunk_bytes`, before the watch's and the
  *   bearer's limits are applied.
- * @property bearerTuBytes bytes the bearer can submit in one unit: GATT `MTU − 3` = 244 at the
- *   recommended MTU 247 (`01-transport.md` §5.1).
+ * @property bearerTuBytes configured fallback budget for `max_chunk_bytes`. The live value comes from
+ *   [com.watchplay.sdk.transport.TransportModule.maxChunkPayloadBytes] (`MTU − 3` on GATT); this is
+ *   the ceiling used when a bearer reports nothing.
  * @property freeQueueSlots receiver queue slots the phone is willing to keep in flight; becomes
  *   `RESULT.initial_credits`, clamped to `16..128` (`03-session.md` §4.2 step 7).
  * @property maxFrameBytes the phone guarantees no encoded frame will exceed this, reported in

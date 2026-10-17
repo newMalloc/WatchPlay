@@ -402,7 +402,7 @@ class SessionManager(
         remoteCapabilities = capabilities
         capabilities.display?.let { layout = WatchLayoutSpec.fromDisplay(it) }
 
-        val outcome = negotiator.negotiate(capabilities, sessionId())
+        val outcome = negotiator.negotiate(capabilities, sessionId(), transport.maxChunkPayloadBytes)
         sendCapsAck(outcome)
 
         if (!outcome.succeeded) {

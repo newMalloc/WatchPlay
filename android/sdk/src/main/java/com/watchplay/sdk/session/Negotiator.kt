@@ -79,10 +79,12 @@ data class NegotiationOutcome(
  *
  * `01-transport.md` §2.2 step 3 says a negotiated MTU below 247 sets `max_chunk_bytes = MTU − 3`
  * (20 bytes at MTU 23), while `03-session.md` §4.2 step 5 requires `max_chunk_bytes >= 84` and
- * `04-video.md` §3.1 divides by `max_chunk_bytes − 20`. Those cannot all hold at MTU 23: this
- * implementation enforces the >= 84 floor (so the chunk arithmetic stays well defined) and treats the
- * bearer's `bearer_tu` as fragmentation granularity only. Raise with the spec maintainer; see the
- * project report.
+ * `04-video.md` §3.1 divides by `max_chunk_bytes − 20`. Those cannot all hold at MTU 23, so this
+ * implementation enforces the >= 84 floor: [negotiate] takes the link's real budget
+ * ([com.watchplay.sdk.transport.TransportModule.maxChunkPayloadBytes]) and clamps to it, but ignores a
+ * budget that is itself below the floor instead of producing an unusable chunk size. The bearer still
+ * fragments anything larger, so a chunk bigger than one ATT write is a throughput question, not a
+ * correctness one. Raise with the spec maintainer; see the project report.
  *
  * @property config phone-side ceilings.
  */
@@ -94,8 +96,14 @@ class Negotiator(
      * Computes the `CAPS_ACK` for [capabilities].
      *
      * @param sessionId random session id for logs and captures; passed in so tests stay deterministic.
+     * @param bearerChunkBudget largest chunk payload the link can submit in one unit; `Int.MAX_VALUE`
+     *   when the bearer is not size-limited. Values below `max_chunk_bytes >= 84` are ignored.
      */
-    fun negotiate(capabilities: Capabilities, sessionId: Long = 0L): NegotiationOutcome {
+    fun negotiate(
+        capabilities: Capabilities,
+        sessionId: Long = 0L,
+        bearerChunkBudget: Int = Int.MAX_VALUE,
+    ): NegotiationOutcome {
         if (!capabilities.isComplete) {
             val missing = buildList {
                 if (capabilities.deviceInfo == null) add("DEVICE_INFO")
@@ -160,7 +168,10 @@ class Negotiator(
 
         // Step 5.
         val watchChunkHint = capabilities.transport?.mtuPayload?.takeIf { it > 0 } ?: config.maxChunkBytesCeiling
-        val maxChunkBytes = minOf(config.maxChunkBytesCeiling, watchChunkHint, config.bearerTuBytes)
+        // §2.2 step 4: report what the link can submit. A budget under the floor cannot be honoured
+        // without breaking the chunk arithmetic, so it is ignored rather than silently rounded up.
+        val linkBudget = bearerChunkBudget.takeIf { it >= ProtocolLimits.MIN_MAX_CHUNK_BYTES } ?: Int.MAX_VALUE
+        val maxChunkBytes = minOf(config.maxChunkBytesCeiling, watchChunkHint, config.bearerTuBytes, linkBudget)
             .coerceIn(ProtocolLimits.MIN_MAX_CHUNK_BYTES, ProtocolLimits.MAX_PAYLOAD_BYTES)
 
         // Step 6.

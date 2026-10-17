@@ -97,6 +97,17 @@ interface TransportModule {
     /** Static description of what this transport can do. */
     val capabilities: TransportCapabilities
 
+    /**
+     * Largest `VIDEO` chunk payload this bearer can carry **without** bearer-level fragmentation.
+     *
+     * On GATT that is `MTU − 3` (`01-transport.md` §2.2 step 4); a bearer whose frames are sized in
+     * software returns [Int.MAX_VALUE]. The session clamps `max_chunk_bytes` to it so the negotiated
+     * value is the one the link can actually submit, which is what §2.2 step 4 asks the phone to
+     * report — and what the watch sizes its reassembly buffer from.
+     */
+    val maxChunkPayloadBytes: Int
+        get() = Int.MAX_VALUE
+
     /** Snapshot of the counters. */
     val stats: TransportStats
 

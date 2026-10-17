@@ -158,4 +158,31 @@ class NegotiatorTest {
         assertEquals(1500, stream.heartbeatMs)
         assertEquals(2000, stream.drainTimeoutMs)
     }
+
+    @Test
+    fun `a small link budget caps max_chunk_bytes even when the watch over-reports`() {
+        // MTU 185 yields bearer_tu 182; the watch still claims 244 in its TRANSPORT TLV.
+        val outcome = negotiator.negotiate(Capabilities.referenceWatch(), bearerChunkBudget = 182)
+
+        assertTrue(outcome.succeeded)
+        assertEquals(182, outcome.result!!.maxChunkBytes)
+        // 04-video.md §3.1: media per chunk is max_chunk_bytes - 20, still above the 64-byte minimum.
+        assertTrue(outcome.result!!.maxChunkBytes - 20 >= 64)
+    }
+
+    @Test
+    fun `a link budget below the chunk floor is ignored instead of rounded up`() {
+        // At MTU 23 the bearer submits 20 bytes, which cannot carry the 20-byte sub-header plus data.
+        val outcome = negotiator.negotiate(Capabilities.referenceWatch(), bearerChunkBudget = 20)
+
+        assertTrue(outcome.succeeded)
+        assertEquals(ProtocolLimits.DEFAULT_MAX_CHUNK_BYTES, outcome.result!!.maxChunkBytes)
+    }
+
+    @Test
+    fun `an unlimited bearer leaves the configured chunk size alone`() {
+        val outcome = negotiator.negotiate(Capabilities.referenceWatch(), bearerChunkBudget = Int.MAX_VALUE)
+
+        assertEquals(ProtocolLimits.DEFAULT_MAX_CHUNK_BYTES, outcome.result!!.maxChunkBytes)
+    }
 }
