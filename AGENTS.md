@@ -18,7 +18,7 @@ Code style, commit format and test requirements live in [CONTRIBUTING.md](CONTRI
 | `tools/` | Executable reference implementation, tests, linters (stdlib only) |
 | `examples/` | Sample watch UI (HTML + CSS), byte-level traces |
 | `android/sdk`, `android/demo` | Phone-side Kotlin SDK and sample app (renders `examples/watch-ui/demo-scene.html` through `WebViewRenderModule`, loopback demo, BLE scan/connect) |
-| `android/demo/art`, `android/demo/tools` | Launcher-icon artwork and the generator that cuts `res/drawable-*` and `res/mipmap-*` from it (needs Pillow, run by hand; the PNGs are generated, never hand-edited) |
+| `android/art` | Launcher-icon artwork and the script that cuts both apps' `res/drawable-*` and `res/mipmap-*` from it (needs Pillow, run by hand; the PNGs are generated, never hand-edited) |
 | `android/sink` | Watch-side app for a second Android device: GATT server, JPEG decode, touch back |
 | `watch/docs/` | Watch-side reference architecture for one board. Documentation only, no firmware source |
 
