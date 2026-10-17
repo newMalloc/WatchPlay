@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">WatchPlay demo</string>
+    <string name="app_name">WatchPlay</string>
     <string name="app_title">WatchPlay</string>
     <string name="app_tagline">phone → watch · 466×466 · MJPEG</string>
 
