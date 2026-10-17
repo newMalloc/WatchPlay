@@ -25,7 +25,29 @@
 
 | 文件 | 展示的规范要点 |
 | :--- | :--- |
+| [`demo-scene.html`](demo-scene.html) | 一个文档三个场景（表盘 / 音乐 / 导航），任意点击互相切换；安全区变量、圆屏/方屏自适应、`:root` 兜底值、`conic-gradient` 封面、内联 SVG 路线、零外部资源 |
 | [`music-player.html`](music-player.html) | 安全区变量注入、`conic-gradient` 弧形进度条、圆屏/方屏自适应、触摸目标尺寸、纯状态更新不做动画 |
+
+## 浏览器预览（带圆形手表外壳）
+
+[`preview/index.html`](preview/index.html) 把 `demo-scene.html` 装进一个 466×466 的 iframe，外面套圆形开孔，旁边有「场景 / 圆屏方屏 / 安全区」三组开关。用 iframe 是为了让 `vmin` 有个 466×466 的视口可算——真机上视口就是表盘。
+
+| 预览 | 说明 |
+| :--- | :--- |
+| ![表盘](preview/screenshot-face.png) | 圆屏、手机注入 140‰（14vmin） |
+| ![音乐](preview/screenshot-music.png) | 同一个文档切换场景，不动布局参数 |
+| ![导航](preview/screenshot-map.png) | 内联 SVG 路线 + CSS 网格，零外部请求 |
+| ![方屏](preview/screenshot-square.png) | 同一个文档按 `data-screen-shape="square"` 换成 4vmin 内缩 |
+
+截图由无头浏览器生成，重新生成：
+
+```pwsh
+msedge --headless=new --disable-gpu --window-size=900,640 --virtual-time-budget=4000 `
+  --screenshot=examples/watch-ui/preview/screenshot-face.png `
+  "file:///<repo>/examples/watch-ui/preview/index.html?scene=face"
+```
+
+`preview/index.html` 接受 `?scene=face|music|map`、`?shape=round|square`、`?inset=<permille>`，方便直接截图或分享某一帧。
 
 ## 写自己的场景
 

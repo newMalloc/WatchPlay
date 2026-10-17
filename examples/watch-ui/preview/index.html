@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>WatchPlay 场景预览（浏览器模拟手表）</title>
+<!--
+  浏览器里的"手表"：一个 466×466 的 iframe 套上圆形开孔，里面跑的就是手机端要投屏的那份文档
+  （examples/watch-ui/demo-scene.html）。用 iframe 是因为 vmin 只有相对**视口**才有意义：
+  真机上视口就是表盘，窗口里只有把视口钉成 466×466，场景的排版才和真机一致。
+
+  这个文件是预览工具，不是场景，所以它可以有 iframe；场景文件本身是零外部依赖的。
+-->
+<style>
+  :root{
+    --bg:#080b11; --card:#101722; --line:#1e2836; --fg:#e8eef9; --dim:#8a93a8; --accent:#4ac6ff;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background:radial-gradient(circle at 70% 20%, #132033 0%, var(--bg) 55%);
+    color:var(--fg); font-family:system-ui,"Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+    display:flex; align-items:center; justify-content:center; gap:48px; padding:32px;
+    overflow:hidden;
+  }
+
+  .stage{ display:flex; align-items:center; justify-content:center; }
+  .device{
+    position:relative; width:466px; height:466px; border-radius:50%;
+    border:16px solid #171f2b;
+    box-shadow:0 0 0 2px #2a3446, 0 0 0 18px #0d131c, 0 40px 90px rgba(0,0,0,.65),
+               inset 0 0 40px rgba(0,0,0,.8);
+    overflow:hidden; flex:0 0 auto;
+    transform-origin:center center;
+  }
+  .device iframe{ display:block; width:466px; height:466px; border:0; background:#05070c; }
+  .device.square{ border-radius:64px; }
+
+  .panel{ width:320px; display:flex; flex-direction:column; gap:18px; }
+  .panel h1{ font-size:15px; font-weight:600; letter-spacing:.02em; }
+  .panel p{ font-size:12px; line-height:1.6; color:var(--dim); }
+  .group{ display:flex; flex-direction:column; gap:8px; background:var(--card);
+          border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .group span{ font-size:11px; color:var(--dim); letter-spacing:.04em; text-transform:uppercase; }
+  .row{ display:flex; gap:8px; }
+  button{
+    flex:1; padding:9px 10px; font-size:12.5px; font-family:inherit; cursor:pointer;
+    background:#16202e; color:var(--fg); border:1px solid var(--line); border-radius:9px;
+    transition:background .12s linear, border-color .12s linear;
+  }
+  button:hover{ background:#1d2a3c; border-color:#2c3d55; }
+  button[data-on="1"]{ background:rgba(74,198,255,.16); border-color:var(--accent); color:#dff3ff; }
+  input[type=range]{ width:100%; accent-color:var(--accent); }
+  code{ font-family:consolas,"Cascadia Mono",monospace; font-size:11.5px; color:#9fd7ff; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="device" id="device">
+    <!-- src 由脚本按当前状态设置一次；写死初始 src 会让首屏和截图抢跑。 -->
+    <iframe id="view" src="about:blank" title="WatchPlay 表盘"></iframe>
+  </div>
+</div>
+
+<div class="panel">
+  <div>
+    <h1>手机端渲染 → 手表画面</h1>
+    <p>框里跑的就是手机 WebView 加载的那份 HTML/CSS（<code>demo-scene.html</code>），
+       视口钉成 466×466，因为真机上视口就是表盘。</p>
+  </div>
+
+  <div class="group">
+    <span>场景（在表盘里也能直接点）</span>
+    <div class="row">
+      <button data-scene="face" data-on="1">表盘</button>
+      <button data-scene="music">音乐</button>
+      <button data-scene="map">导航</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <span>屏幕形状（手机注入 data-screen-shape）</span>
+    <div class="row">
+      <button data-shape="round" data-on="1">圆屏</button>
+      <button data-shape="square">方屏</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <span>安全区内缩（手机注入 --wp-safe-inset）</span>
+    <div class="row">
+      <button data-inset-mode="auto" data-on="1">按形状兜底</button>
+      <button data-inset-mode="fixed">手机指定值</button>
+    </div>
+    <span id="inset-label">圆屏 14vmin / 方屏 4vmin（场景自带的兜底值）</span>
+    <input id="inset" type="range" min="60" max="180" step="10" value="140" disabled>
+  </div>
+</div>
+
+<script>
+(function () {
+  var view = document.getElementById("view");
+  var device = document.getElementById("device");
+  var inset = document.getElementById("inset");
+  var insetLabel = document.getElementById("inset-label");
+  var scene = "face";
+  var shape = "round";
+  var insetMode = "auto";
+
+  // 让截图与外部链接能指定初始状态：?scene=music&shape=square&inset=100
+  (function fromQuery() {
+    var query = new URLSearchParams(location.search);
+    var wanted = query.get("scene");
+    if (wanted === "face" || wanted === "music" || wanted === "map") scene = wanted;
+    if (query.get("shape") === "square") shape = "square";
+    var permille = parseInt(query.get("inset") || "", 10);
+    if (permille >= 60 && permille <= 180) {
+      inset.value = String(permille);
+      insetMode = "fixed";
+    }
+    document.querySelectorAll("[data-scene]").forEach(function (button) {
+      button.dataset.on = button.dataset.scene === scene ? "1" : "0";
+    });
+    document.querySelectorAll("[data-shape]").forEach(function (button) {
+      button.dataset.on = button.dataset.shape === shape ? "1" : "0";
+    });
+    document.querySelectorAll("[data-inset-mode]").forEach(function (button) {
+      button.dataset.on = button.dataset.insetMode === insetMode ? "1" : "0";
+    });
+  })();
+
+  function load() {
+    var permille = inset.value;
+    var injected = insetMode === "fixed";
+    inset.disabled = !injected;
+    insetLabel.textContent = injected
+      ? "手机注入 " + permille + "‰ → " + (permille / 10) + "vmin"
+      : "圆屏 14vmin / 方屏 4vmin（场景自带的兜底值）";
+    var query = "?shape=" + shape + (injected ? "&inset=" + permille : "");
+    view.src = "../demo-scene.html" + query + "#" + scene;
+    device.classList.toggle("square", shape === "square");
+  }
+
+  document.querySelectorAll("[data-scene]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      scene = button.dataset.scene;
+      document.querySelectorAll("[data-scene]").forEach(function (other) {
+        other.dataset.on = other === button ? "1" : "0";
+      });
+      load();
+    });
+  });
+
+  document.querySelectorAll("[data-shape]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      shape = button.dataset.shape;
+      document.querySelectorAll("[data-shape]").forEach(function (other) {
+        other.dataset.on = other === button ? "1" : "0";
+      });
+      load();
+    });
+  });
+
+  document.querySelectorAll("[data-inset-mode]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      insetMode = button.dataset.insetMode;
+      document.querySelectorAll("[data-inset-mode]").forEach(function (other) {
+        other.dataset.on = other === button ? "1" : "0";
+      });
+      load();
+    });
+  });
+
+  inset.addEventListener("input", load);
+
+  function fit() {
+    var scale = Math.min(1, (innerWidth * 0.52) / 500, (innerHeight * 0.9) / 500);
+    device.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+  load();
+})();
+</script>
+</body>
+</html>
