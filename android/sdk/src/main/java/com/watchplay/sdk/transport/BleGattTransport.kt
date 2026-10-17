@@ -154,6 +154,7 @@ class BleGattTransport internal constructor(
         this.listener = listener
         userClosed = false
         attempts = 0
+        busyRetries = 0
         lastError = null
         parser.reset()
         synchronized(lock) { writes.clear() }
@@ -424,22 +425,35 @@ interface Delay {
     fun shutdown()
 }
 
-/** Default [Delay]: one daemon scheduler per transport. */
+/** Default [Delay]: a daemon scheduler that is created lazily, so a transport can be reopened. */
 class ExecutorDelay : Delay {
 
-    private val executor = ScheduledThreadPoolExecutor(1) { runnable ->
-        Thread(runnable, "watchplay-gatt-delay").apply { isDaemon = true }
-    }.apply { removeOnCancelPolicy = true }
+    private val lock = Any()
+    private var executor: ScheduledThreadPoolExecutor? = null
 
     override fun after(delayMs: Long, action: () -> Unit) {
+        val target = synchronized(lock) {
+            val current = executor?.takeIf { !it.isShutdown }
+            current ?: ScheduledThreadPoolExecutor(1) { runnable ->
+                Thread(runnable, "watchplay-gatt-delay").apply { isDaemon = true }
+            }.apply {
+                removeOnCancelPolicy = true
+                executor = this
+            }
+        }
         try {
-            executor.schedule({ action() }, delayMs, TimeUnit.MILLISECONDS)
+            target.schedule({ action() }, delayMs, TimeUnit.MILLISECONDS)
         } catch (_: java.util.concurrent.RejectedExecutionException) {
             // The transport was closed while a retry was queued: nothing left to retry.
         }
     }
 
     override fun shutdown() {
-        executor.shutdownNow()
+        val target = synchronized(lock) {
+            val current = executor
+            executor = null
+            current
+        }
+        target?.shutdownNow()
     }
 }

@@ -94,7 +94,7 @@ Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.m
 
 | 里程碑 | 交付物 | 状态 |
 | :--- | :--- | :--- |
-| M1 | MJPEG 投屏 Demo | 手机端 SDK 与手表端 App 已实现（92 项 JVM 测试），未真机联调 |
+| M1 | MJPEG 投屏 Demo | 手机端 SDK 与手表端 App 已实现（94 项 JVM 测试），未真机联调 |
 | M2 | 地图导航 + 音乐播放 | 场景骨架已就位，未跑通 |
 | M3 | H.264 + Wi-Fi 通道 | Wi-Fi 与经典蓝牙承载：规范已定，无实现；H.264：编码器是桩，且无硬解参考硬件 |
 | M4 | Android SDK | 可构建（67 项 JVM 测试），未发布 |

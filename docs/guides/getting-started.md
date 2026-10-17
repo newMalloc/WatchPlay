@@ -152,7 +152,7 @@ sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 
 ```pwsh
 cd android
-./gradlew :sdk:test          # 92 项协议逻辑单元测试，不需要设备
+./gradlew :sdk:test          # 94 项协议逻辑单元测试，不需要设备
 ./gradlew :sdk:assembleDebug
 ```
 
