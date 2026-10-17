@@ -197,7 +197,8 @@ class MusicPlayerApp : MirrorApp {
             var d = window.watchplay.data || {};
             document.getElementById('title').textContent = d.title || '';
             document.getElementById('artist').textContent = d.artist || '';
-            document.getElementById('state').textContent = (d.playing === 'true') ? '&gt;&gt;' : '&gt;';
+            // textContent does not decode entities: '&gt;&gt;' would render as the literal characters.
+            document.getElementById('state').textContent = (d.playing === 'true') ? '>>' : '>';
             var p = parseFloat(d.progress || '0');
             document.documentElement.style.setProperty('--wp-progress', String(isFinite(p) ? p : 0));
             document.getElementById('ring').setAttribute('aria-valuenow', String(Math.round((isFinite(p) ? p : 0) * 100)));

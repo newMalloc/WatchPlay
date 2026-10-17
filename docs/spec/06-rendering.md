@@ -245,8 +245,10 @@ val js = """
 if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
     WebViewCompat.addDocumentStartJavaScript(web, js, setOf("*"))
 } else {
-    // 兜底：加载前把值字符串替换进 HTML 的 :root{}，同样零闪帧
-    html = html.replace("/*WP_INJECT*/", "--wp-safe-inset:${insetVmin}vmin;")
+    // 兜底：加载前改写 <html> 标签，同样零闪帧。必须写成**内联**声明并**覆盖** data-screen-shape：
+    // §3.4 的形状兜底 html[data-screen-shape="square"]{--wp-safe-inset:4vmin} 特异性为 0,1,1，
+    // 高于 :root 的 0,1,0，塞进 :root 会被它顶掉——方屏上就用了场景默认值而不是手表上报值。
+    html = withSafeArea(html, shape, "--wp-safe-inset:${insetVmin}vmin;")
 }
 
 // 4) 精确测量到手表物理分辨率（纹理尺寸 == CAPS.width × CAPS.height）
@@ -254,6 +256,8 @@ web.measure(View.MeasureSpec.makeMeasureSpec(caps.width,  View.MeasureSpec.EXACT
             View.MeasureSpec.makeMeasureSpec(caps.height, View.MeasureSpec.EXACTLY))
 web.layout(0, 0, caps.width, caps.height)
 ```
+
+场景写在 `<html>` 上的 `data-screen-shape="round"` 是**浏览器预览用的默认值**：手机端 **必须（MUST）** 覆盖它，而不是"属性已存在就沿用场景的"——只加不改会让方屏手表永远停在 `round` 布局。同理，上报的 `--wp-safe-inset` **必须（MUST）** 覆盖场景的兜底值（§2.3 R1/R2），不能与它并存由层叠顺序决定胜负。
 
 **关于非 1:1 的 device pixel ratio。** 所有边距都用相对单位，所以 DPR ≠ 1 时布局**看起来**仍然正确；但两件事会坏：① `1vmin` 不再等于 1% 的手表物理像素，捕获纹理尺寸与触控映射之间出现因子 `scale = 物理px / CSSpx`（§4）；② 文字先按 CSS px 网格栅格化再被放大，`border: 1px` 之类的细节会消失或变成 2 px。
 
@@ -297,6 +301,8 @@ html[data-screen-shape="square"] .dial { width: 34vmin; height: 34vmin; }
 ```
 
 **应当（SHOULD）** 只用 CSS 做形状适配，不要在 JS 里 `if (shape === 'round')` 重建 DOM——重建触发完整重排 + 重绘，在 10 fps 的捕获节拍下很可能丢帧。需要 JS 分支时只切换类名 / 属性。
+
+上面的形状兜底**只服务于浏览器预览**：手机端注入的是 `<html>` 上的内联声明，优先级高于任何样式表规则，所以方屏上的 `--wp-safe-inset: 4vmin` 不会压过手表上报的值（§2.3 R1、§8 检查表）。把注入值写进 `:root{}` 则会——这是参考实现里踩过的坑，见 [99-changelog.md](99-changelog.md)。
 
 ### 3.5 文字
 

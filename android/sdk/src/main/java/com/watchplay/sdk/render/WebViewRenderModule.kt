@@ -27,9 +27,11 @@ import com.watchplay.sdk.touch.TouchAction
  *    normative: the phone injects the watch's own `safe_inset_permille` **verbatim** as
  *    `--wp-safe-inset: (safe_inset_permille / 10)vmin` (note `vmin`, not `%`) together with
  *    `data-screen-shape`, and must not substitute a hard-coded margin. This implementation rewrites the
- *    scene's [INJECTION_MARKER] — the fallback the specification itself defines — because that path
- *    needs no extra dependency. The preferred `WebViewCompat.addDocumentStartJavaScript` path lives in
- *    `androidx.webkit`, which `:sdk` does not depend on yet; see the TODO below.
+ *    `<html>` tag: the declaration lands **inline** and `data-screen-shape` is **overwritten** with what
+ *    the watch reported, so neither the scene's `:root` fallback nor its shape-keyed fallback can win.
+ *    [injectNegotiatedCss] explains why the carrier matters. The preferred
+ *    `WebViewCompat.addDocumentStartJavaScript` path lives in `androidx.webkit`, which `:sdk` does not
+ *    depend on yet; see the TODO below.
  *  * [dispatchTouch] injects native [MotionEvent]s, as `05-input.md` §2.4 requires.
  *  * **Every entry point is thread-safe.** The session thread calls [loadScene] and [dispatchTouch] and
  *    the pipeline thread calls [applyUpdate], but a `WebView` only accepts work from the thread that
@@ -278,32 +280,36 @@ class WebViewRenderModule(
     companion object {
 
         /**
-         * Marker a scene places inside `:root{}` so that the phone can substitute the negotiated
-         * values with a plain string replace — the dependency-free fallback of `06-rendering.md` §3.2.
-         *
-         * The marker **must sit after the scene's own fallback declaration**: the injected declaration
-         * lands in the same rule and the later one wins.
+         * Marker a scene may place inside `:root{}` for the string-replacement fallback of
+         * `06-rendering.md` §3.2. The replacement is a convenience, not the carrier that decides the
+         * value — see [injectNegotiatedCss].
          */
         const val INJECTION_MARKER: String = "/*WP_INJECT*/"
     }
 }
 
 /**
- * Injects the negotiated safe-area custom property and `data-screen-shape` into [html].
+ * Injects the negotiated safe area and panel shape into [html] before the first paint.
  *
- * `06-rendering.md` §2.3 R1 fixes the exact form:
- * `--wp-safe-inset: (safe_inset_permille / 10)vmin`, injected verbatim, plus `data-screen-shape` on
- * `<html>` so one document can serve round and square panels (§3.4).
+ * `06-rendering.md` §2.3 R1 fixes the exact form: `--wp-safe-inset: (safe_inset_permille / 10)vmin`,
+ * injected verbatim; R3 wants it in place before anything is drawn.
  *
- * Two carriers, in order of preference:
+ * ## Why the declaration goes inline on `<html>`
  *
- *  1. [WebViewRenderModule.INJECTION_MARKER] inside the scene's `:root{}`. The replacement keeps the
- *     scene's fallback in place and relies on cascade order — see the marker's KDoc.
- *  2. A `style` attribute on `<html>` (merged into an existing `style`, if any). An inline declaration
- *     wins over every stylesheet rule, so this path does not care where the fallback sits.
+ * Both carriers are written, and they are not equal:
  *
- * The `data-screen-shape` attribute is added only when the opening tag does not already carry it: a
- * scene may hard-code a shape for a single-panel family, and overwriting it would be a lie.
+ *  1. **Inline `style` on `<html>` — this is the one that decides.** The document-start path of §3.2
+ *     ends up in the same place (`documentElement.style.setProperty`). A scene's own fallbacks are
+ *     stylesheet rules, and §3.3/§3.4 encourage keying them on shape:
+ *     `html[data-screen-shape="square"]{ --wp-safe-inset:4vmin }` has specificity `0,1,1`, which outranks
+ *     a `:root` declaration (`0,1,0`). Writing the negotiated value into `:root` alone therefore loses on
+ *     a square panel, which is exactly what §8's checklist forbids ("未被任何本地默认值覆盖").
+ *  2. [WebViewRenderModule.INJECTION_MARKER] inside `:root{}`, when the scene has one. This keeps the
+ *     value visible where scenes historically expected it, and it is harmless because (1) wins anyway.
+ *
+ * The same reasoning applies to the shape attribute: a scene hard-codes a default so that the document
+ * also looks right when opened in a browser, and the phone **overwrites** it with what the watch reported.
+ * Adding the attribute only when it is missing would silently keep the scene's guess on a square watch.
  */
 internal fun injectNegotiatedCss(html: String, layout: WatchLayoutSpec): String {
     val declarations = "--wp-safe-inset:${layout.cssSafeInsetValue};"
@@ -311,20 +317,39 @@ internal fun injectNegotiatedCss(html: String, layout: WatchLayoutSpec): String 
     val openTag = HTML_OPEN_TAG.find(replaced)
         ?: return "<html data-screen-shape=\"${layout.cssScreenShape}\" style=\"$declarations\">$replaced</html>"
 
-    var tag = openTag.value
-    if (!tag.contains(DATA_SCREEN_SHAPE, ignoreCase = true)) {
-        tag = withAttribute(tag, "data-screen-shape=\"${layout.cssScreenShape}\"")
-    }
-    if (!html.contains(WebViewRenderModule.INJECTION_MARKER)) {
-        tag = withStyleDeclaration(tag, declarations)
-    }
+    var tag = withShape(openTag.value, layout.cssScreenShape)
+    tag = withInset(tag, declarations)
     return if (tag == openTag.value) replaced else replaced.replaceRange(openTag.range, tag)
 }
 
 /** The opening `<html ...>` tag, if the document has one. */
 private val HTML_OPEN_TAG = Regex("<html[^>]*>", RegexOption.IGNORE_CASE)
 
-private const val DATA_SCREEN_SHAPE = "data-screen-shape"
+/** Matches an opening-tag `data-screen-shape="..."` (or `'...'`). */
+private val SHAPE_ATTRIBUTE = Regex("""data-screen-shape\s*=\s*(?:"[^"]*"|'[^']*')""", RegexOption.IGNORE_CASE)
+
+/** Matches an opening-tag `style="..."` (or `'...'`) attribute and captures its value. */
+private val STYLE_ATTRIBUTE = Regex("""\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
+
+/** Matches a single `--wp-safe-inset` declaration, so a stale value in the tag cannot survive. */
+private val SAFE_INSET_DECLARATION = Regex("""--wp-safe-inset\s*:\s*[^;]*;?""", RegexOption.IGNORE_CASE)
+
+/** Appoints the negotiated shape, replacing whatever default the scene declared. */
+private fun withShape(tag: String, shape: String): String {
+    val attribute = "data-screen-shape=\"$shape\""
+    val existing = SHAPE_ATTRIBUTE.find(tag) ?: return withAttribute(tag, attribute)
+    return tag.replaceRange(existing.range, attribute)
+}
+
+/** Prepends [declarations] to the tag's `style` attribute, creating one when absent. */
+private fun withInset(tag: String, declarations: String): String {
+    val existing = STYLE_ATTRIBUTE.find(tag) ?: return withAttribute(tag, "style=\"$declarations\"")
+    val value = existing.groupValues[1].ifEmpty { existing.groupValues[2] }
+    val cleaned = SAFE_INSET_DECLARATION.replace(value, "").trim().trim(';').trim()
+    // Re-quote with `"` so the result has one predictable form; `declarations` already ends with `;`.
+    val merged = if (cleaned.isEmpty()) declarations else "$declarations $cleaned"
+    return tag.replaceRange(existing.range, "style=\"$merged\"")
+}
 
 /** Appends [attribute] to an opening tag, before its `>`. */
 private fun withAttribute(tag: String, attribute: String): String {
@@ -333,14 +358,3 @@ private fun withAttribute(tag: String, attribute: String): String {
     val separator = if (head.last().isWhitespace()) "" else " "
     return head + separator + attribute + tag.substring(end)
 }
-
-/** Prepends [declarations] to the tag's `style` attribute, creating one when absent. */
-private fun withStyleDeclaration(tag: String, declarations: String): String {
-    val existing = STYLE_ATTRIBUTE.find(tag) ?: return withAttribute(tag, "style=\"$declarations\"")
-    val value = existing.groupValues[1].ifEmpty { existing.groupValues[2] }.trim()
-    // Re-quote with `"` so the result is one predictable form; `declarations` already ends with `;`.
-    return tag.replaceRange(existing.range, "style=\"$declarations $value\"")
-}
-
-/** Matches an opening-tag `style="..."` (or `'...'`) attribute and captures its value. */
-private val STYLE_ATTRIBUTE = Regex("""\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)

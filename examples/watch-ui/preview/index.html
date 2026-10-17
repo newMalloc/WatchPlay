@@ -95,7 +95,7 @@
       <button data-inset-mode="auto" data-on="1">按形状兜底</button>
       <button data-inset-mode="fixed">手机指定值</button>
     </div>
-    <span id="inset-label">圆屏 140‰ → 14vmin / 方屏 40‰ → 4vmin</span>
+    <span id="inset-label">场景兜底：圆屏 14vmin / 方屏 4vmin</span>
     <input id="inset" type="range" min="60" max="180" step="10" value="140" disabled>
   </div>
 </div>
@@ -137,15 +137,15 @@
   }
 
   function load() {
-    var permille = inset.value;
+    var permille = Number(inset.value);
     var injected = insetMode === "fixed";
     inset.disabled = !injected;
-    // 真机上安全区由手机按形状各取一个值（圆屏 140‰、方屏 40‰），"按形状兜底"这一档模拟的就是它。
-    var effective = injected ? permille : (shape === "square" ? 40 : 140);
+    // 场景自己按形状给了兜底（圆屏 14vmin / 方屏 4vmin）；手机注入的是内联声明，会盖掉兜底。
     insetLabel.textContent = injected
       ? "手机注入 " + permille + "‰ → " + (permille / 10) + "vmin"
-      : "圆屏 140‰ → 14vmin / 方屏 40‰ → 4vmin（当前 " + (effective / 10) + "vmin）";
-    view.src = "../demo-scene.html?scene=" + scene + "&shape=" + shape + "&inset=" + effective;
+      : "场景兜底：圆屏 14vmin / 方屏 4vmin";
+    view.src = "../demo-scene.html?scene=" + scene + "&shape=" + shape +
+      (injected ? "&inset=" + permille : "");
     device.classList.toggle("square", shape === "square");
   }
 

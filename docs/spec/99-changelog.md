@@ -6,6 +6,11 @@
 
 ## [未发布]
 
+### 澄清（v0.1 草案内，不改变任何线上字节）
+
+- **`--wp-safe-inset` 的注入载体**：§3.2 的字符串替换兜底改为写进 `<html>` 的**内联**声明，并**覆盖**场景里的 `data-screen-shape`。原因：§3.4 的形状兜底 `html[data-screen-shape="square"]{--wp-safe-inset:4vmin}` 特异性是 `0,1,1`，高于 `:root` 的 `0,1,0`；只替换 `:root{}` 里的 `/*WP_INJECT*/` 时，方屏手表上报的 `safe_inset_permille` 会被场景默认值顶掉，与 §8 检查表的"注入值未被任何本地默认值覆盖"冲突。`/*WP_INJECT*/` 仍可用，但不再是决定值的那条声明。参考实现：`android/sdk` 的 `injectNegotiatedCss`。
+- **形状属性是手机写、场景只在浏览器里兜底**：场景 `<html data-screen-shape="round">` 里的默认值 **必须** 被覆盖，"属性已存在就跳过"会让方屏手表停在 `round` 布局。
+
 ### 计划中（v0.2 候选）
 
 见 [07-capabilities.md §5](07-capabilities.md) 的开放问题表。摘录：

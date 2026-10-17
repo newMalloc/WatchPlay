@@ -1,11 +1,9 @@
 package com.watchplay.sdk.apps
 
-import com.watchplay.sdk.protocol.ControlCommand
 import com.watchplay.sdk.render.SceneUpdate
 import com.watchplay.sdk.render.WatchLayoutSpec
 import com.watchplay.sdk.render.WatchScene
 import com.watchplay.sdk.touch.MappedTouch
-import com.watchplay.sdk.touch.TouchAction
 
 /**
  * Turn-by-turn navigation on the watch face.
@@ -110,11 +108,10 @@ class MapNavigationApp : MirrorApp {
     }
 
     override fun onTouch(touch: MappedTouch): Boolean {
-        if (touch.action != TouchAction.UP) return false
-        // A tap anywhere on the navigation face is a "repeat the instruction" request.
-        host?.sendControl(ControlCommand.REPORT_STATS)
-        dirty = true
-        return true
+        // The nav face has no controls of its own: hands the tap to the WebView, where a scene's buttons
+        // live (`05-input.md` §2.4). A tap is also not a stats request — `CONTROL.REPORT_STATS` is what
+        // the host app sends on its own schedule, and answering a touch with it would swallow the tap.
+        return false
     }
 
     override fun onStart(host: MirrorApp.Host) {

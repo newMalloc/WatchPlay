@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-screen-shape="round">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -8,11 +8,12 @@
   一个文档，三个场景：表盘、音乐播放、地图导航，点击互相切换。
 
   这个文件就是手机端要渲染并投屏给手表的那份 HTML：android/demo 把它原样打进 APK 的 assets
-  （Gradle 直接把 examples/watch-ui 当成 asset 目录，不复制第二份），再由 :sdk 的
-  WebViewRenderModule 加载。所以它遵守 docs/spec/06-rendering.md：
+  （构建时暂存这一个文件，不复制第二份），再由 :sdk 的 WebViewRenderModule 加载。所以它遵守
+  docs/spec/06-rendering.md：
     * 所有尺寸用 vmin / %，绝不用绝对像素（手表换屏不用改场景）；
-    * 边距只来自 var(--wp-safe-inset)：圆屏 140‰、方屏 40‰ 由手机按手表上报的值注入，本文件给的
-      14vmin 只是兜底，且注入标记必须排在兜底之后——同一个声明块里靠后的那条生效；
+    * 边距只来自 var(--wp-safe-inset)：本文件给圆屏 14vmin、方屏 4vmin 的兜底，手机端按手表上报的
+      safe_inset_permille 注入**内联**声明盖掉它们（内联压过任何样式表规则，§2.3 R1/R2）；
+    * <html> 上的 data-screen-shape="round" 只是浏览器里的默认值，手机端会改写它（§3.2/§3.4）；
     * 一个文档同时服务圆屏与方屏：方屏四角没有裁切，可用宽度更多，所以切换按钮在那儿放大一号；
     * 背景不透明——JPEG 没有 alpha，透明会被编成黑色；
     * 零外部请求：没有图片、字体、iframe、外链 CSS，图标全用 CSS 与内联 SVG；
@@ -29,6 +30,9 @@
   --wp-accent:#4ac6ff; --wp-warm:#ffb35c; --wp-ok:#6ee7a8;
   /*WP_INJECT*/
 }
+/* 圆屏/方屏的边距兜底，与 §3.3/§3.4 的写法一致；手机注入的内联值优先级更高。 */
+html[data-screen-shape="round"]{ --wp-safe-inset:14vmin; }
+html[data-screen-shape="square"]{ --wp-safe-inset:4vmin; }
 /* 方屏四角没有裁切，可用宽度更多，切换按钮放大一号；圆屏维持 20vmin。 */
 html[data-screen-shape="square"] .btn-switch{ width:22vmin; height:22vmin; }
 
