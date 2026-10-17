@@ -57,6 +57,33 @@ class CapsCodecTest {
     }
 
     @Test
+    fun `classic bluetooth bearer_tu rides in the ext prefix`() {
+        // 01-transport.md section 5.2: an RFCOMM frame size of 990 cannot fit the u8 `mtu` field,
+        // so the peer reports 255 there and puts the real value in the first two bytes of `ext`.
+        val caps =
+            TransportCaps(
+                bearers = TransportCaps.BEARER_GATT or TransportCaps.BEARER_BT_SPP,
+                preferred = TransportCaps.BEARER_BT_SPP,
+                mtuPayload = 255,
+                ext = byteArrayOf(0xDE.toByte(), 0x03.toByte()),
+            )
+
+        assertTrue(caps.supportsBtSpp)
+        assertFalse(caps.supportsL2capCoc)
+        assertEquals(990, caps.btBearerTu)
+        assertEquals(6, caps.encode().size)
+        assertEquals(990, TransportCaps.decode(caps.encode()).btBearerTu)
+    }
+
+    @Test
+    fun `btBearerTu is null unless bit3 is set`() {
+        val caps = TransportCaps(TransportCaps.BEARER_GATT, TransportCaps.BEARER_GATT, 244)
+
+        assertFalse(caps.supportsBtSpp)
+        assertNull(caps.btBearerTu)
+    }
+
+    @Test
     fun `unknown TLV types are skipped by length and never fatal`() {
         val payload = CapsCodec.encode(Capabilities.referenceWatch()).toMutableList()
         // Prepend a vendor TLV of 5 bytes and an unregistered standard TLV of 2 bytes.

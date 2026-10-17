@@ -499,6 +499,23 @@ data class TransportCaps(
     val supportsL2capCoc: Boolean
         get() = bearers and BEARER_L2CAP_COC != 0
 
+    /** `true` when the watch supports the classic Bluetooth (RFCOMM/SPP) bearer. */
+    val supportsBtSpp: Boolean
+        get() = bearers and BEARER_BT_SPP != 0
+
+    /**
+     * Real `bearer_tu` of the classic-Bluetooth bearer, or `null` when bit3 is unset.
+     *
+     * `mtuPayload` is a u8 truncated at 255 because it was sized for BLE; an RFCOMM frame size of
+     * 990 cannot fit, so the peer carries it as a little-endian u16 in the first two bytes of `ext`
+     * (`01-transport.md` section 5.2).
+     */
+    val btBearerTu: Int?
+        get() {
+            if (!supportsBtSpp || ext.size < 2) return null
+            return (ext[0].toInt() and 0xFF) or ((ext[1].toInt() and 0xFF) shl 8)
+        }
+
     /** Serialises the value (`4 + ext.size` bytes). */
     fun encode(): ByteArray {
         val out = ByteArray(MIN_SIZE_BYTES + ext.size)
@@ -540,6 +557,9 @@ data class TransportCaps(
 
         /** Bearer bit: Wi-Fi TCP (Phase 2). */
         const val BEARER_WIFI_TCP: Int = 0x04
+
+        /** Bearer bit: classic Bluetooth RFCOMM / SPP (optional). */
+        const val BEARER_BT_SPP: Int = 0x08
 
         /** Parses the value. */
         fun decode(data: ByteArray, offset: Int = 0, length: Int = data.size - offset): TransportCaps {

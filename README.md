@@ -96,7 +96,7 @@ Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.m
 | M1 | MJPEG 投屏 Demo | 协议规范 v0.1 已完成；真机 Demo 未开始 |
 | M2 | 地图导航 + 音乐播放 | 场景骨架已就位，未跑通 |
 | M3 | H.264 + Wi-Fi 通道 | Wi-Fi 与经典蓝牙承载：规范已定，无实现；H.264：编码器已实现，无参考硬件可验收 |
-| M4 | Android SDK | 可构建（65 项 JVM 测试），未发布 |
+| M4 | Android SDK | 可构建（67 项 JVM 测试），未发布 |
 | M5 | 协议 v1.0 + 认证计划 | 未开始 |
 | M6 | 首个厂商接入 | 未开始 |
 

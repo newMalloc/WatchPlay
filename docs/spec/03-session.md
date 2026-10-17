@@ -313,7 +313,7 @@ ESP32-S3 的 AMOLED 面板驱动（如 CO5300/SH8601）通常通过 QSPI 接收 
 | `0x0A` | `ACK` | 双向 | u32 被确认的 `seq` | 仅当对应帧置了 `ACK_REQUIRED` |
 | `0x0B` | `SCENE_CHANGE` | 手机→手表 | u8 scene_id | 通知手表 UI 语义切换（如从导航切到音乐），便于手表调整局部刷新策略 |
 | `0x0C` | `HAPTIC` | 手机→手表 | u8 强度, u16 时长ms | 请求震动 |
-| `0x0D` | `SWITCH_TRANSPORT` | 手机→手表 | u8 bearer, 变长参数 | 请求切换承载（如切到 Wi-Fi），见 [01-transport.md](01-transport.md) |
+| `0x0D` | `SWITCH_TRANSPORT` | 手机→手表 | u8 bearer, 变长参数 | 请求切换承载（如 GATT → CoC、BLE → 经典蓝牙、任何 → Wi-Fi），见 [01-transport.md](01-transport.md) |
 | `0x0E` | `REPORT_STATS` | 双向 | 无 | 请求对端立即发一次 `FEEDBACK` |
 
 `SET_QUALITY` / `SET_FPS` **必须（MUST）** 遵循"就低不就高"：手表只能请求**降低**相对 `CAPS_ACK` 的值，**禁止（MUST NOT）** 用它超过协商上限。手机可以自行决定是否遵守，但若忽略 **应当（SHOULD）** 记录日志。
