@@ -85,11 +85,11 @@ TLV 的字节布局定义在 [03-session.md §3](03-session.md)。本文件**不
 
 | 偏移 | 长度 | 字段 | 类型 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| 0 | 1 | `bearers` | u8 | bit0=GATT，bit1=L2CAP CoC，bit2=Wi-Fi TCP |
+| 0 | 1 | `bearers` | u8 | bit0=GATT，bit1=L2CAP CoC，bit2=Wi-Fi TCP，bit3=经典蓝牙 SPP（[01-transport.md §5](01-transport.md)） |
 | 1 | 1 | `preferred` | u8 | 首选承载的位值（如 `0x02`） |
 | 2 | 1 | `mtu` | u8 | **上限截断为 255** 的可用负载字节数；更大时用扩展 TLV |
 | 3 | 1 | `reserved` | u8 | |
-| 4 | … | `ext` | 变长 | 可选：Wi-Fi SSID/PSM 等，厂商自定义 |
+| 4 | … | `ext` | 变长 | 可选。当 bit3 置位时，前 2 字节 **必须（MUST）** 是 u16 小端的 `bearer_tu`（它的值超过 u8 的 `mtu` 上限，见 [01-transport.md §5.2](01-transport.md)）；其余为 Wi-Fi SSID/PSM 等自定义内容 |
 
 ### 2.3 `SENSORS`（4 字节）
 
@@ -186,6 +186,7 @@ TLV 的字节布局定义在 [03-session.md §3](03-session.md)。本文件**不
 | `CAPS` 的双向性 | 目前 `CAPS` 单向（手表→手机），手机的能力只在 `HELLO_ACK.flags` 里粗略声明 | 倾向新增 `CAPS_SOURCE` TLV |
 | 音频旁路 | 支持经典蓝牙的芯片（ATS3089）如何建立 A2DP 链路 | 倾向定义 `CONTROL(SWITCH_TRANSPORT, A2DP)` 但不在 v0.1 实现 |
 | 传输切换的原子性 | `SWITCH_TRANSPORT` 过程中的丢帧边界未定义 | 见 [01-transport.md](01-transport.md) 开放问题 |
+| 经典蓝牙承载的配对与取舍 | 只有 BR/EDR 的设备如何配对、`bearer_tu` 取多少、双模设备选哪个承载 | 见 [01-transport.md §11](01-transport.md) 的 Q12–Q14 |
 | TLV 长度扩展 | `len` 是 u8，上限 255 字节，`CAPS` 总预算 128 字节 | 倾向把 `CAPS` 上限提到 256 并让 `len` 用 u8 但允许跨 TLV 分片 |
 
 ## 6. 实现矩阵
@@ -194,7 +195,8 @@ TLV 的字节布局定义在 [03-session.md §3](03-session.md)。本文件**不
 
 | 设备档位 | 示例 | codec | 分辨率 | fps | 承载 | 音频 | 备注 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **参考实现** | LilyGO T-Display S3 AMOLED 1.43 | MJPEG | 466×466 | 10 | GATT | 手机本地 | M1 目标 |
+| **参考实现（示例）** | LilyGO T-Display S3 AMOLED 1.43 | MJPEG | 466×466 | 10 | GATT | 手机本地 | M1 目标，不代表协议要求 |
+| T0-经典 | 仅 BR/EDR + JPEG 硬解 | MJPEG | ≤ 240×240 | 5 | SPP | 无 | 没有可用 BLE 的设备的最低档 |
 | T0 最低档 | 任意 BLE + JPEG 硬解 MCU | MJPEG | ≤ 240×240 | 5 | GATT | 无 | 必须能互通 |
 | T1 低端 | ESP32-S3 + 8MB PSRAM | MJPEG | 466×466 | 10–12 | GATT / CoC | 手机本地 | |
 | T2 中端 | ATS3089 等带 H.264 硬解 | H.264 | ≤ 466×466 | 20–30 | CoC | A2DP | Profile B 目标 |

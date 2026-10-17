@@ -69,6 +69,17 @@ HELLO_ACK_PAYLOAD_BYTES: Final[int] = 24
 RESULT_TLV_BYTES: Final[int] = 24
 STREAM_TLV_BYTES: Final[int] = 12
 
+#: `TRANSPORT` TLV `bearers` bitmap (spec 07 section 2.2). One bit per bearer;
+#: the bit positions are wire-visible, so they are frozen like any other value.
+BEARER_GATT: Final[int] = 0x01
+BEARER_L2CAP_COC: Final[int] = 0x02
+BEARER_WIFI_TCP: Final[int] = 0x04
+BEARER_BT_SPP: Final[int] = 0x08
+
+#: RFCOMM frame size (N1) to request for the classic-Bluetooth bearer
+#: (spec 01 section 5). Negotiated per link, so this is a default, not a promise.
+DEFAULT_BT_SPP_BEARER_TU: Final[int] = 990
+
 #: Field layout of FEEDBACK (spec 04 section 4.2): (name, width in bytes).
 #: Kept as data so `TestFieldTables` can assert the declared total equals the
 #: sum. An earlier draft declared 20 bytes while the table totalled 22, which

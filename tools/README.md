@@ -13,7 +13,7 @@
 | [`watchplay_proto.py`](watchplay_proto.py) | 线格式的权威实现：帧头编解码、CRC-16、RFC 1982 序列号算术、流式解析器（含重同步）。**这是规范的可执行形式。** |
 | [`gen_traces.py`](gen_traces.py) | 生成 `examples/protocol-traces/` 的权威字节级 trace。规范里引用的每个 hex dump 都由它产出，所以文档不可能悄悄漂移。 |
 | [`analyze_stream.py`](analyze_stream.py) | 抓包分析器：帧类型直方图、CRC 错误、重同步、**off-by-20 分块诊断**、Credit 流、实测帧率与开销。 |
-| [`test_protocol.py`](test_protocol.py) | 46 项一致性测试，含"冻结常量"与示例场景校验。 |
+| [`test_protocol.py`](test_protocol.py) | 48 项一致性测试，含"冻结常量"与示例场景校验。 |
 | [`lint_scenes.py`](lint_scenes.py) | 校验 `examples/watch-ui/` 的场景符合渲染规范：触控目标 ≥ 7 mm、安全区用 `vmin`、背景不透明、无外部资源、无滚动。 |
 | [`check_doc_links.py`](check_doc_links.py) | 校验 `docs/` 里的相对链接与页内锚点。 |
 | [`render_diagrams.py`](render_diagrams.py) | 把 `docs/diagrams/*.mmd` 渲染成同名 SVG。**唯一需要联网的脚本**，改了图源就要重跑。图以 SVG 提交而不是内联 Mermaid：GitHub 的渲染器不支持 subgraph 内的 `direction`，带跨栏连线的图会被摊成几千像素宽的横带。 |
@@ -21,7 +21,7 @@
 ## 常用命令
 
 ```pwsh
-python tools/test_protocol.py          # 全部一致性测试（46 项）
+python tools/test_protocol.py          # 全部一致性测试（48 项）
 python tools/gen_traces.py             # 重新生成 trace（改动协议后必须跑）
 python tools/gen_traces.py --check     # 校验提交的 trace 与当前代码一致（CI 用）
 python tools/check_doc_links.py        # 校验文档交叉引用

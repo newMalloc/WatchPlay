@@ -14,18 +14,18 @@ flowchart LR
         inject -.-> ui
     end
 
-    subgraph watch["手表端 (ESP32-S3 等)"]
+    subgraph watch["手表端（任意 MCU / SoC）"]
         direction TB
         bearer["传输层"]
         reassemble["协议解包 / 重组"]
-        decode["解码<br/>JPEG 硬解 / H.264"]
-        psram["PSRAM 双缓冲<br/>TE 同步"]
-        panel["466×466 圆屏"]
-        touch["触控采集 (FT3168)"]
+        decode["解码<br/>JPEG / H.264"]
+        frames["帧缓冲<br/>防撕裂"]
+        panel["手表屏幕<br/>形状由 DISPLAY 上报"]
+        touch["触控采集"]
 
-        bearer --> reassemble --> decode --> psram --> panel
+        bearer --> reassemble --> decode --> frames --> panel
         panel -.- touch
         touch -. "上行触控" .-> bearer
     end
 
-    tx <-->|"BLE · GATT / CoC"| bearer
+    tx <-->|"BLE GATT / CoC<br/>经典蓝牙 · Wi-Fi"| bearer

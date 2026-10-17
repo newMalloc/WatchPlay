@@ -18,6 +18,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from watchplay_proto import (  # noqa: E402
+    BEARER_BT_SPP,
+    BEARER_GATT,
+    BEARER_L2CAP_COC,
+    BEARER_WIFI_TCP,
+    DEFAULT_BT_SPP_BEARER_TU,
     DEFAULT_INITIAL_CREDITS,
     DEFAULT_MAX_CHUNK_BYTES,
     DEFAULT_ROUND_SAFE_INSET_PERMILLE,
@@ -451,6 +456,24 @@ class TestFrozenConstants(unittest.TestCase):
     def test_default_credit_window(self):
         # docs/spec/03-session.md section 4 / docs/spec/04-video.md section 4.1
         self.assertEqual(DEFAULT_INITIAL_CREDITS, 64)
+
+    def test_bearer_bitmap(self):
+        # docs/spec/07-capabilities.md section 2.2
+        self.assertEqual(BEARER_GATT, 0x01)
+        self.assertEqual(BEARER_L2CAP_COC, 0x02)
+        self.assertEqual(BEARER_WIFI_TCP, 0x04)
+        self.assertEqual(BEARER_BT_SPP, 0x08)
+        # A peer sets bits; it never writes a bearer index. Duplicates would make
+        # "bit set" ambiguous, so every bearer owns exactly one bit.
+        bits = (BEARER_GATT, BEARER_L2CAP_COC, BEARER_WIFI_TCP, BEARER_BT_SPP)
+        self.assertEqual(len(set(bits)), len(bits))
+
+    def test_bt_spp_bearer_tu_does_not_fit_the_u8_mtu_field(self):
+        # docs/spec/07-capabilities.md section 2.2: TRANSPORT.mtu is a u8
+        # truncated at 255 because it was sized for BLE. The classic-Bluetooth
+        # bearer's bearer_tu is larger, so it must travel in the ext TLV --
+        # an implementation that stuffs it into `mtu` silently reports 990 & 0xFF.
+        self.assertGreater(DEFAULT_BT_SPP_BEARER_TU, 255)
 
     def test_round_safe_area_hard_limit(self):
         # docs/spec/06-rendering.md section 2: the largest centred axis-aligned
