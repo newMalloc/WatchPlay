@@ -6,7 +6,7 @@
 
 ![会话状态机](../diagrams/session-states.svg)
 
-图源是 [session-states.mmd](../diagrams/session-states.mmd)。任一状态收到 `BYE`、帧结构错误或超时，都回到 `IDLE`（见 [§7](#7-bye-断开)）。
+任一状态收到 `BYE`、帧结构错误或超时，都回到 `IDLE`（见 [§7](#7-bye-断开)）。
 
 ### 1.1 状态定义
 

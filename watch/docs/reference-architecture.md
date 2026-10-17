@@ -34,7 +34,7 @@ ESP32-S3 **没有 H.264 硬件解码器**。
 
 ![Core 0 / Core 1 分工](../../docs/diagrams/core-split.svg)
 
-图源是 [core-split.mmd](../../docs/diagrams/core-split.mmd)。Credit 归还由 Core 1 在解码完成后通知 Core 0。
+Credit 归还由 Core 1 在解码完成后通知 Core 0。
 
 ### 绑定方式
 

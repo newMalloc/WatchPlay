@@ -21,8 +21,6 @@
 
 ![WatchPlay 架构](docs/diagrams/architecture.svg)
 
-图源是 [docs/diagrams/architecture.mmd](docs/diagrams/architecture.mmd)。这里用图片而不是内联 Mermaid：GitHub 的 Mermaid 渲染器会忽略 subgraph 的 `direction`，带跨栏连线的图会被摊平成几千像素宽的横带，缩到正文宽度后文字不可读。
-
 音频：ESP32-S3 无经典蓝牙，不支持 A2DP，音频由手机本地播放。带经典蓝牙的芯片（如炬芯 ATS3089）可走 A2DP 独立链路。
 
 ## 编码 Profile

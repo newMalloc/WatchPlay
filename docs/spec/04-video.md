@@ -310,8 +310,6 @@ Android 侧两种可选实现：
 
 ![双核分工的数据流](../diagrams/core-pipeline.svg)
 
-图源是 [core-pipeline.mmd](../diagrams/core-pipeline.mmd)。
-
 跨核队列 **必须（MUST）** 是固定大小的环形队列（推荐深度 2），并 **应当（SHOULD）** 用 FreeRTOS 的 `xQueueSendFromISR` / `xQueueReceive`，**禁止（MUST NOT）** 用信号量 + 全局缓冲（容易漏帧且难调试）。
 
 > **Credit 归还的时机**：应在 Core 1 **成功解码完成后** 归还 Credit，而不是在 Core 0 收到块时就归还。若在收到时就归还，手机可以持续满速推送，而 Core 1 跟不上时会静默丢帧且手机毫无感知——Credit 机制就失去了意义。

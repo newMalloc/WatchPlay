@@ -16,7 +16,7 @@
 | [`test_protocol.py`](test_protocol.py) | 46 项一致性测试，含"冻结常量"与示例场景校验。 |
 | [`lint_scenes.py`](lint_scenes.py) | 校验 `examples/watch-ui/` 的场景符合渲染规范：触控目标 ≥ 7 mm、安全区用 `vmin`、背景不透明、无外部资源、无滚动。 |
 | [`check_doc_links.py`](check_doc_links.py) | 校验 `docs/` 里的相对链接与页内锚点。 |
-| [`render_diagrams.py`](render_diagrams.py) | 把 `docs/diagrams/*.mmd` 渲染成同名 SVG。**唯一需要联网的脚本**，改了图源就要重跑。 |
+| [`render_diagrams.py`](render_diagrams.py) | 把 `docs/diagrams/*.mmd` 渲染成同名 SVG。**唯一需要联网的脚本**，改了图源就要重跑。图以 SVG 提交而不是内联 Mermaid：GitHub 的渲染器不支持 subgraph 内的 `direction`，带跨栏连线的图会被摊成几千像素宽的横带。 |
 
 ## 常用命令
 
