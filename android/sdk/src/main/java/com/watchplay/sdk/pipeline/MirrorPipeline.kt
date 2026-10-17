@@ -209,6 +209,20 @@ class MirrorPipeline(
     fun onFeedback(feedback: Feedback, rttMs: Long, nowMs: Long = MonotonicClock.nowMs()): Boolean =
         rateControl?.onFeedback(feedback, rttMs, nowMs) ?: false
 
+    /**
+     * Applies `CONTROL(SET_QUALITY)` from the watch; `0` returns the decision to the §6 loop.
+     *
+     * @return the quality now in effect.
+     */
+    fun setPinnedQuality(quality: Int): Int = rateControl?.setPinnedQuality(quality) ?: quality
+
+    /**
+     * Applies `CONTROL(SET_FPS)` from the watch; `0` returns cadence to the §6 loop.
+     *
+     * @return the frame rate now in effect.
+     */
+    fun setPinnedFps(fps: Int): Int = rateControl?.setPinnedFps(fps) ?: effectiveTargetFps()
+
     /** Cadence in effect: the §6 value once a session negotiated, else the configured one. */
     private fun effectiveTargetFps(): Int = rateControl?.targetFps ?: config.targetFps
 

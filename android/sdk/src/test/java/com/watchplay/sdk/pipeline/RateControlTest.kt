@@ -3,6 +3,7 @@ package com.watchplay.sdk.pipeline
 import com.watchplay.sdk.protocol.Feedback
 import com.watchplay.sdk.protocol.FeedbackFlags
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -209,8 +210,53 @@ class RateControlTest {
     }
 
     @Test
-    fun `reset restores the negotiated values`() {
+    fun `a value the watch pinned is not moved by the loop`() {
         val control = RateControl(negotiatedQuality = 70, negotiatedFps = 10)
+        assertEquals(80, control.setPinnedQuality(80))
+        assertTrue(control.isQualityPinned)
+
+        control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 0)
+        control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 1_000)
+        control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 2_000)
+
+        assertEquals("the watch asked for 80; cadence is the loop's lever", 80, control.quality)
+        assertEquals(6, control.targetFps)
+    }
+
+    @Test
+    fun `SET_QUALITY with zero hands the decision back`() {
+        val control = RateControl(negotiatedQuality = 70, negotiatedFps = 10)
+        control.setPinnedQuality(80)
+        control.setPinnedQuality(0)
+        assertFalse(control.isQualityPinned)
+
+        control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 0)
+        control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 1_000)
+
+        assertEquals("the loop resumes from the value the pin left behind", 72, control.quality)
+    }
+
+    @Test
+    fun `a pinned value is clamped into the range the protocol allows`() {
+        val control = RateControl(negotiatedQuality = 70, negotiatedFps = 10)
+
+        assertEquals("quality ceiling", 85, control.setPinnedQuality(100))
+        assertEquals("quality floor", 40, control.setPinnedQuality(10))
+        assertEquals("frame rate ceiling is the negotiated one", 10, control.setPinnedFps(99))
+    }
+
+    @Test
+    fun `a pinned frame rate survives a slow decoder`() {
+        val control = RateControl(negotiatedQuality = 70, negotiatedFps = 10)
+        control.setPinnedFps(10)
+
+        control.onFeedback(feedback(decodeMsAvg = 900), rttMs = 0, nowMs = 0)
+
+        assertEquals(10, control.targetFps)
+    }
+
+    @Test
+    fun `reset restores the negotiated values`() {        val control = RateControl(negotiatedQuality = 70, negotiatedFps = 10)
         control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 0)
         control.onFeedback(feedback(queueDepth = 9), rttMs = 0, nowMs = 1_000)
         control.onFrameSent()

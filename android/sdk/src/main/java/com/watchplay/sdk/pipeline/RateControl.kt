@@ -83,6 +83,12 @@ class RateControl(
 
     private var lastRecoveryMs: Long = NONE
 
+    /** Set by `CONTROL(SET_QUALITY)`; blocks the §6 rules from moving quality. */
+    private var qualityPinned: Boolean = false
+
+    /** Set by `CONTROL(SET_FPS)`; blocks the §6 rules from moving cadence. */
+    private var fpsPinned: Boolean = false
+
     /** Steady-state quality the loop has settled on; recovery climbs back toward the negotiated value. */
     val quality: Int
         get() = synchronized(lock) { steadyQuality }
@@ -90,6 +96,47 @@ class RateControl(
     /** Cadence the pipeline should use; never above [negotiatedFps]. */
     val targetFps: Int
         get() = synchronized(lock) { steadyFps }
+
+    /** `true` while `CONTROL(SET_QUALITY, n)` holds quality at a value the watch chose. */
+    val isQualityPinned: Boolean
+        get() = synchronized(lock) { qualityPinned }
+
+    /** `true` while `CONTROL(SET_FPS, n)` holds the cadence at a value the watch chose. */
+    val isFpsPinned: Boolean
+        get() = synchronized(lock) { fpsPinned }
+
+    /**
+     * Applies `CONTROL(SET_QUALITY)` (`03-session.md` §5.3).
+     *
+     * `0` hands the decision back to the loop and leaves quality where it currently is, so a watch that
+     * pins a value for one scene and then releases it does not jump back to full quality.
+     *
+     * A pinned dimension is skipped by the §6 rules that would move it: the watch asked for that value,
+     * and the loop still has frame rate as its lever. This is what the protocol's "0 = 由手机自适应"
+     * distinction exists for.
+     *
+     * @return the quality now in effect.
+     */
+    fun setPinnedQuality(quality: Int): Int = synchronized(lock) {
+        if (quality == 0) {
+            qualityPinned = false
+        } else {
+            steadyQuality = quality.coerceIn(minQuality, maxQuality)
+            qualityPinned = true
+        }
+        steadyQuality
+    }
+
+    /** Applies `CONTROL(SET_FPS)`; `0` hands cadence back to the loop. See [setPinnedQuality]. */
+    fun setPinnedFps(fps: Int): Int = synchronized(lock) {
+        if (fps == 0) {
+            fpsPinned = false
+        } else {
+            steadyFps = fps.coerceIn(MIN_FPS, negotiatedFps)
+            fpsPinned = true
+        }
+        steadyFps
+    }
 
     /**
      * Quality to encode the next frame with.
@@ -179,11 +226,11 @@ class RateControl(
         // §6 recovery — 10 s quiet, then +4 quality and +1 fps, at most once per 5 s.
         if (nowMs - lastSymptomMs >= RECOVERY_IDLE_MS && due(lastRecoveryMs, nowMs, RECOVERY_COOLDOWN_MS)) {
             var recovered = false
-            if (steadyQuality < negotiatedQuality) {
+            if (!qualityPinned && steadyQuality < negotiatedQuality) {
                 steadyQuality = (steadyQuality + QUALITY_STEP_UP).coerceAtMost(negotiatedQuality)
                 recovered = true
             }
-            if (steadyFps < negotiatedFps) {
+            if (!fpsPinned && steadyFps < negotiatedFps) {
                 steadyFps++
                 recovered = true
             }
@@ -208,6 +255,10 @@ class RateControl(
         } else {
             steadyQuality = (steadyQuality - OVERSIZE_QUALITY_STEP).coerceAtLeast(minQuality)
             lastSymptomMs = nowMs
+            // §6 makes this a MUST, so it overrides a pinned quality: the frame cannot be sent at all
+            // otherwise. The pin is cleared rather than silently ignored, so recovery cannot disagree
+            // with the value now in use.
+            qualityPinned = false
             steadyQuality
         }
     }
@@ -228,6 +279,8 @@ class RateControl(
             creditLowSinceMs = NONE
             lastRttShiftMs = NONE
             lastRecoveryMs = NONE
+            qualityPinned = false
+            fpsPinned = false
         }
     }
 
@@ -238,16 +291,18 @@ class RateControl(
         lastMs == NONE || nowMs - lastMs >= cooldownMs
 
     private fun shiftQualityDown(step: Int, nowMs: Long) {
-        if (steadyQuality > minQuality) {
+        if (!qualityPinned && steadyQuality > minQuality) {
             steadyQuality = (steadyQuality - step).coerceAtLeast(minQuality)
             lastSymptomMs = nowMs
         } else {
-            // Quality is at the floor: frame rate is the only lever left (§6 hard constraint).
+            // Quality is either pinned by the watch or at the floor: frame rate is the remaining lever
+            // (§6 hard constraint, and the `OVERLOADED` wording in §4.3).
             shiftFpsDown(FPS_STEP, nowMs)
         }
     }
 
     private fun shiftFpsDown(step: Int, nowMs: Long) {
+        if (fpsPinned) return
         if (steadyFps > MIN_FPS) {
             steadyFps = (steadyFps - step).coerceAtLeast(MIN_FPS)
             lastSymptomMs = nowMs

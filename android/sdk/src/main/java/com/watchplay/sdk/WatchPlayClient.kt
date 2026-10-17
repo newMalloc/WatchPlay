@@ -14,6 +14,7 @@ import com.watchplay.sdk.protocol.ControlCommand
 import com.watchplay.sdk.protocol.Frame
 import com.watchplay.sdk.protocol.FrameType
 import com.watchplay.sdk.protocol.Feedback
+import com.watchplay.sdk.protocol.LittleEndian
 import com.watchplay.sdk.render.SceneUpdate
 import com.watchplay.sdk.render.UIRenderModule
 import com.watchplay.sdk.render.WatchLayoutSpec
@@ -255,9 +256,17 @@ class WatchPlayClient private constructor(
             ControlCommand.RESUME ->
                 if (session.state == SessionState.STREAMING) pipeline.streamingEnabled = true
 
+            // `03-session.md` §5.3: `0` hands the dimension back to the §6 loop.
+            ControlCommand.SET_QUALITY -> pipeline.setPinnedQuality(controlParameter(payload))
+            ControlCommand.SET_FPS -> pipeline.setPinnedFps(controlParameter(payload))
+
             else -> Unit
         }
     }
+
+    /** First `u8` parameter of a `CONTROL` payload; `0` when the watch omitted it. */
+    private fun controlParameter(payload: ByteArray): Int =
+        if (payload.size >= 2) LittleEndian.readU8(payload, 1) else 0
 
     override fun onFeedbackReceived(feedback: Feedback) {
         if (feedback.requestsKeyframe) config.encoder.requestKeyframe()
