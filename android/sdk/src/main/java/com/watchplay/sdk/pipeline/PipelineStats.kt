@@ -53,6 +53,9 @@ data class PipelineConfig(
  * @property creditRemaining outbound credit window left.
  * @property averageLatencyMs mean time from capture timestamp to successful send, **phone-local**
  *   (it deliberately excludes the watch's clock, which is a different time base).
+ * @property quality JPEG quality the `04-video.md` §6 loop has settled on; before a session negotiates
+ *   it is the profile's value.
+ * @property targetFps cadence in effect. Below the negotiated value means §6 backed off.
  * @property lastError most recent recoverable problem, or `null`.
  */
 data class PipelineStats(
@@ -67,19 +70,23 @@ data class PipelineStats(
     val queueDepth: Int = 0,
     val creditRemaining: Int = 0,
     val averageLatencyMs: Double = 0.0,
+    val quality: Int = 0,
+    val targetFps: Int = 0,
     val lastError: String? = null,
 ) {
 
     /** One-line form, for logs. */
     override fun toString(): String =
         "PipelineStats(${"%.1f".format(fps)}fps, ${"%.1f".format(bytesPerSecond / 1024)}KB/s, " +
-            "sent=$framesSent, dropped=$framesDropped, skipped=$framesSkipped, chunks=$chunksSent, " +
-            "queue=$queueDepth, credit=$creditRemaining, latency=${"%.0f".format(averageLatencyMs)}ms" +
+            "q=$quality@${targetFps}fps, sent=$framesSent, dropped=$framesDropped, " +
+            "skipped=$framesSkipped, chunks=$chunksSent, queue=$queueDepth, credit=$creditRemaining, " +
+            "latency=${"%.0f".format(averageLatencyMs)}ms" +
             (lastError?.let { ", error='$it'" } ?: "") + ")"
 
     /** Multi-line form, for a status panel such as the demo's `TextView`. */
     fun summary(): String = buildString {
         append("fps: ").append("%.1f".format(fps)).append('\n')
+        append("quality: q").append(quality).append(" @ ").append(targetFps).append(" fps target\n")
         append("throughput: ").append("%.1f".format(bytesPerSecond / 1024)).append(" KB/s\n")
         append("frames sent: ").append(framesSent).append('\n')
         append("frames dropped (credit): ").append(framesDropped).append('\n')

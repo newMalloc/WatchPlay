@@ -33,9 +33,10 @@ import java.nio.ByteBuffer
  *
  * ## Threading
  *
- * Mutable state ([bitmap], [profile]) is written by `prepare` on the main thread and read by `encode`
- * on the pipeline thread; the pipeline guarantees it never calls `encode` concurrently with
- * `prepare`, so no locking is needed. That invariant is documented rather than enforced — keep it.
+ * Mutable state ([bitmap], [profile], [quality]) is written by `prepare`/`setQuality` on the main or
+ * session thread and read by `encode` on the pipeline thread. [quality] is `@Volatile` because §6
+ * changes it while frames are in flight; the bitmap-swapping invariant is unchanged: the pipeline never
+ * calls `encode` concurrently with `prepare`.
  */
 class MjpegEncoder : EncoderModule {
 
@@ -58,6 +59,15 @@ class MjpegEncoder : EncoderModule {
     private var encodeBuffer: ByteArrayOutputStream? = null
     private var framesEncoded: Long = 0L
 
+    /**
+     * JPEG quality used for the next frame.
+     *
+     * Separate from [profile] because `04-video.md` §6 changes quality mid-session and a re-prepare
+     * would recycle the bitmap and cost a frame. Resets to the profile's value on every [prepare].
+     */
+    @Volatile
+    private var quality: Int = EncodeProfile.DEFAULT_JPEG_QUALITY
+
     override val codec: VideoCodec?
         get() = profile?.codec
 
@@ -76,6 +86,7 @@ class MjpegEncoder : EncoderModule {
         release()
         return try {
             this.profile = profile
+            this.quality = profile.jpegQuality
             this.width = width
             this.height = height
             this.bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -117,8 +128,8 @@ class MjpegEncoder : EncoderModule {
         return try {
             bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
             buffer.reset()
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, profile.jpegQuality, buffer)) {
-                lastError = "Bitmap.compress(JPEG, ${profile.jpegQuality}) returned false"
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, buffer)) {
+                lastError = "Bitmap.compress(JPEG, $quality) returned false"
                 return null
             }
             val bytes = buffer.toByteArray()
@@ -136,7 +147,7 @@ class MjpegEncoder : EncoderModule {
                 ptsUs = ptsUs,
                 width = width,
                 height = height,
-                quality = profile.jpegQuality,
+                quality = quality,
             )
         } catch (error: IllegalArgumentException) {
             // Raised by Bitmap when the buffer geometry does not match the bitmap.
@@ -151,6 +162,28 @@ class MjpegEncoder : EncoderModule {
     /** No-op: every MJPEG frame is already a keyframe. */
     override fun requestKeyframe() = Unit
 
+    /**
+     * Applies a §6 quality change to the next frame.
+     *
+     * No re-prepare, no bitmaps recycled, no keyframe: a JPEG is independent, so the switch is exact.
+     */
+    override fun setQuality(quality: Int): Boolean {
+        if (quality !in 1..100) {
+            lastError = "JPEG quality out of range: $quality"
+            return false
+        }
+        if (!isReady) {
+            lastError = "setQuality($quality) called before a successful prepare()"
+            return false
+        }
+        this.quality = quality
+        return true
+    }
+
+    /** JPEG quality in use for the next frame. */
+    val currentQuality: Int
+        get() = quality
+
     override fun release() {
         isReady = false
         bitmap?.recycle()
@@ -162,8 +195,7 @@ class MjpegEncoder : EncoderModule {
     }
 
     override fun toString(): String =
-        "MjpegEncoder(ready=$isReady, ${width}x$height, q=${profile?.jpegQuality ?: 0}, " +
-            "frames=$framesEncoded)"
+        "MjpegEncoder(ready=$isReady, ${width}x$height, q=$quality, frames=$framesEncoded)"
 
     companion object {
         /** Name used in logs. */

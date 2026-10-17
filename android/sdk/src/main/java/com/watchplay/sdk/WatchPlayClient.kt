@@ -64,8 +64,8 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  *  * Video only starts once the watch has sent `CAPS` **and** granted credit through `FEEDBACK`; with
  *    [GlTextureCapture] (a stub) no frames are produced at all, so the pipeline reports them as skipped.
- *  * `DISCONTINUITY` and drop accounting are implemented; adaptive quality control
- *    (`04-video.md` §6) is not.
+ *  * `DISCONTINUITY`, drop accounting and the `04-video.md` §6 quality/frame-rate loop are implemented;
+ *    the loop is a heuristic (§6 says SHOULD), not a bandwidth model.
  *  * Reconnect backoff (`03-session.md` §8) is left to the host app.
  *
  * @property config resolved dependencies; see [Builder].
@@ -225,7 +225,7 @@ class WatchPlayClient private constructor(
         val result = outcome.result ?: return
         val stream: CapsStream? = outcome.ack.stream
         val maxFrameBytes = stream?.maxFrameBytes ?: config.sessionConfig.maxFrameBytes
-        pipeline.configure(result, maxFrameBytes)
+        pipeline.configure(result, maxFrameBytes, result.initialCredits.toLong())
         touchHandler = TouchHandler(
             layout = session.layout,
             cssViewportWidthPx = result.widthPx.toFloat(),
@@ -261,10 +261,8 @@ class WatchPlayClient private constructor(
 
     override fun onFeedbackReceived(feedback: Feedback) {
         if (feedback.requestsKeyframe) config.encoder.requestKeyframe()
-        if (feedback.isOverloaded) {
-            // TODO(next contributor): implement the rate-control loop of `04-video.md` §6 (drop quality
-            // or frame rate; never change resolution) using feedback.queueDepth and decodeMsAvg.
-        }
+        // `04-video.md` §6: the loop lives in the pipeline so quality and cadence change together.
+        pipeline.onFeedback(feedback, session.roundTripTimeMs.toLong())
     }
 
     override fun onDrainTimeout(drainingMs: Long) {

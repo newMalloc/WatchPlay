@@ -15,6 +15,7 @@ import com.watchplay.sdk.protocol.ColorFormat
 import com.watchplay.sdk.protocol.DeviceInfo
 import com.watchplay.sdk.protocol.DisplayCaps
 import com.watchplay.sdk.protocol.Feedback
+import com.watchplay.sdk.protocol.FeedbackFlags
 import com.watchplay.sdk.protocol.Frame
 import com.watchplay.sdk.protocol.FrameType
 import com.watchplay.sdk.protocol.Hello
@@ -42,6 +43,7 @@ import com.watchplay.sdk.transport.TransportModule
 import com.watchplay.sdk.transport.TransportState
 import com.watchplay.sdk.util.MonotonicClock
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -88,6 +90,19 @@ class WatchSink(
     private val framesDecoded = AtomicLong(0L)
     private val chunksReceived = AtomicLong(0L)
     private val decodeMsTotal = AtomicLong(0L)
+
+    /**
+     * `VIDEO` chunks of completed frames that are waiting for the decode thread.
+     *
+     * This is `FEEDBACK.queue_depth` in the spec's unit — chunks, not frames (`04-video.md` §4.2) — and
+     * it is what makes `04-video.md` §6 row 1 visible to the sender. A sink that always reports 0 tells
+     * the phone "I am fine" no matter how far behind it is, which is how a BLE link ends up with a
+     * permanent multi-second lag instead of a lower frame rate.
+     */
+    private val queuedChunks = AtomicInteger(0)
+
+    /** Frames waiting for the serial decode thread; more than one means the sink is behind. */
+    private val queuedFrames = AtomicInteger(0)
 
     private val startedAtMs = AtomicLong(0L)
 
@@ -262,7 +277,11 @@ class WatchSink(
             onStatus("cannot decode ${frame.codec.displayName} without a hardware decoder")
             return
         }
+        queuedChunks.addAndGet(frame.header.chunkTotal)
+        queuedFrames.incrementAndGet()
         decoder.execute {
+            queuedChunks.addAndGet(-frame.header.chunkTotal)
+            queuedFrames.decrementAndGet()
             val startedAt = MonotonicClock.nowMs()
             val bitmap = BitmapFactory.decodeByteArray(frame.codedData, 0, frame.sizeBytes)
             val tookMs = MonotonicClock.nowMs() - startedAt
@@ -284,24 +303,36 @@ class WatchSink(
     }
 
     private fun sendFeedback(failed: Boolean = false) {
+        val decoded = framesDecoded.get()
+        val decodeMsAvg = if (decoded == 0L) 0 else (decodeMsTotal.get() / decoded).coerceAtMost(0xFFFF).toInt()
         val feedback = Feedback(
             credits = windowCredits,
-            framesDecoded = framesDecoded.get() and 0xFFFFFFFFL,
+            framesDecoded = decoded and 0xFFFFFFFFL,
             framesDropped = assembler.stats.framesRejected and 0xFFFFFFFFL,
-            decodeMsAvg = if (framesDecoded.get() == 0L) {
-                0
-            } else {
-                (decodeMsTotal.get() / framesDecoded.get()).coerceAtMost(0xFFFF).toInt()
-            },
-            queueDepth = 0,
+            decodeMsAvg = decodeMsAvg,
+            queueDepth = queuedChunks.get().coerceIn(0, 0xFFFF),
             lastFrameStatus = if (failed) LastFrameStatus.DECODE_ERROR else LastFrameStatus.OK,
-            lastFrameId = if (framesDecoded.get() == 0L) {
+            flags = if (isOverloaded(decodeMsAvg)) FeedbackFlags.OVERLOADED else 0,
+            lastFrameId = if (decoded == 0L) {
                 Feedback.NO_FRAME_ID
             } else {
-                (framesDecoded.get() - 1) and 0xFFFFFFFFL
+                (decoded - 1) and 0xFFFFFFFFL
             },
         )
         send(FrameType.FEEDBACK, feedback.encode())
+    }
+
+    /**
+     * Whether this sink is behind — `FEEDBACK.OVERLOADED` (`04-video.md` §4.3).
+     *
+     * Two independent signs: a frame already waits behind the serial decoder (the queue is not draining),
+     * or decoding alone eats 80 % of the negotiated frame interval (the same ratio §6 uses on the sender
+     * side, so both ends agree on what "too slow" means).
+     */
+    private fun isOverloaded(decodeMsAvg: Int): Boolean {
+        if (queuedFrames.get() > 1) return true
+        val frameIntervalMs = 1000.0 / (negotiated?.targetFps ?: DEFAULT_TARGET_FPS).coerceAtLeast(1)
+        return decodeMsAvg > OVERLOAD_DECODE_RATIO * frameIntervalMs
     }
 
     private fun sendEcho(type: FrameType, payload: ByteArray) {
@@ -372,6 +403,12 @@ class WatchSink(
 
         /** `max_chunk_bytes` this sink asks for; the phone's negotiator clamps it down if its MTU is smaller. */
         private const val LOG_EVERY_N_FRAMES: Long = 30L
+
+        /** Cadence assumed before `CAPS_ACK` reports one; matches the reference pairing's 10 fps. */
+        private const val DEFAULT_TARGET_FPS: Int = 10
+
+        /** Decoding this share of a frame interval counts as overload — the same ratio §6 uses. */
+        private const val OVERLOAD_DECODE_RATIO: Double = 0.8
 
         /** Stable device id; a real watch uses its chip id (`03-session.md` §2.1). */
         private val DEVICE_ID = ByteArray(16) { index -> (0x40 + index).toByte() }

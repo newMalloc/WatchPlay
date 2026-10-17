@@ -6,6 +6,7 @@ import com.watchplay.sdk.encoder.EncodedFrame
 import com.watchplay.sdk.encoder.EncoderModule
 import com.watchplay.sdk.protocol.CapsResult
 import com.watchplay.sdk.protocol.Frame
+import com.watchplay.sdk.protocol.Feedback
 import com.watchplay.sdk.protocol.ProtocolLimits
 import com.watchplay.sdk.protocol.VideoFrameChunker
 import com.watchplay.sdk.transport.SendResult
@@ -35,9 +36,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## What it does not do
  *
- * Rate control (`04-video.md` §6: quality and frame-rate adaptation from `FEEDBACK`) is policy and
- * lives in the caller — `SessionManager.Listener.onFeedbackReceived` reports the inputs. This class
- * only counts; it never silently changes the negotiated parameters.
+ * Resolution never changes: `04-video.md` §6 forbids it mid-session. Quality and frame rate do change,
+ * but only through [RateControl], which is fed by [onFeedback] and never moves above the negotiated
+ * values.
  *
  * ## Threading
  *
@@ -99,6 +100,20 @@ class MirrorPipeline(
     private var encodeProfile: EncodeProfile = config.profile
     private var nextFrameId = 0L
     private var maxFrameBytes: Long = Long.MAX_VALUE
+
+    /**
+     * The §6 control loop, created by [configure] from the negotiated values.
+     *
+     * `null` before a session negotiates, in which case the pipeline runs at
+     * [PipelineConfig.targetFps] and whatever quality the profile carries.
+     */
+    @Volatile
+    private var rateControl: RateControl? = null
+
+    /** Quality currently pushed into the encoder; `-1` means "never set". */
+    @Volatile
+    private var appliedQuality: Int = -1
+
     private var pendingDiscontinuity = false
     private var lastError: String? = null
 
@@ -113,9 +128,15 @@ class MirrorPipeline(
      *
      * @param result the negotiated `RESULT` TLV.
      * @param streamMaxFrameBytes `STREAM.max_frame_bytes`, the receiver's reassembly budget.
+     * @param initialCredits `RESULT.initial_credits`, the reference point for the "credits 长期低于初始值/4"
+     *   rule of `04-video.md` §6.
      * @return `true` when the encoder accepted the profile.
      */
-    fun configure(result: CapsResult, streamMaxFrameBytes: Long): Boolean {
+    fun configure(
+        result: CapsResult,
+        streamMaxFrameBytes: Long,
+        initialCredits: Long = RateControl.DEFAULT_INITIAL_CREDITS,
+    ): Boolean {
         chunker = VideoFrameChunker(result.maxChunkBytes)
         maxFrameBytes = streamMaxFrameBytes
         encodeProfile = when (result.codec) {
@@ -126,6 +147,12 @@ class MirrorPipeline(
                 baseline = result.h264Profile == com.watchplay.sdk.protocol.H264Caps.PROFILE_BASELINE,
             )
         }
+        rateControl = RateControl(
+            negotiatedQuality = result.quality,
+            negotiatedFps = result.targetFps,
+            initialCredits = initialCredits,
+        )
+        appliedQuality = -1
         nextFrameId = 0L
         pendingDiscontinuity = false
         val prepared = encoder.prepare(encodeProfile, result.widthPx, result.heightPx)
@@ -152,6 +179,8 @@ class MirrorPipeline(
             queueDepth = 0, // The pipeline never queues: a frame is either sent or dropped.
             creditRemaining = transport.availableCreditChunks,
             averageLatencyMs = latency,
+            quality = rateControl?.quality ?: encodeProfile.quality,
+            targetFps = effectiveTargetFps(),
             lastError = lastError ?: encoder.lastError ?: capture.lastError,
         )
     }
@@ -167,16 +196,45 @@ class MirrorPipeline(
         lastError = null
     }
 
+    /**
+     * Feeds one `FEEDBACK` into the `04-video.md` §6 control loop.
+     *
+     * Quality takes effect on the next frame through the encoder's runtime quality knob, so no
+     * re-prepare and no keyframe are needed; frame rate takes effect on the next pipeline cycle.
+     *
+     * @param feedback the receiver's report.
+     * @param rttMs session RTT, or a negative value while unmeasured.
+     * @return `true` when quality or frame rate changed.
+     */
+    fun onFeedback(feedback: Feedback, rttMs: Long, nowMs: Long = MonotonicClock.nowMs()): Boolean =
+        rateControl?.onFeedback(feedback, rttMs, nowMs) ?: false
+
+    /** Cadence in effect: the §6 value once a session negotiated, else the configured one. */
+    private fun effectiveTargetFps(): Int = rateControl?.targetFps ?: config.targetFps
+
+    /**
+     * Pushes the current §6 quality into the encoder.
+     *
+     * Encoders that cannot change quality at runtime (the H.264 stub, for instance) answer `false` and
+     * keep the profile they were prepared with; that is not an error.
+     */
+    private fun applyRateControlQuality() {
+        val controller = rateControl ?: return
+        val quality = controller.effectiveQuality
+        if (quality == appliedQuality) return
+        if (encoder.setQuality(quality)) appliedQuality = quality
+    }
+
     /** Starts the pipeline thread at the configured frame rate. */
     fun start() {
         if (running) return
         running = true
         windowStartMs = MonotonicClock.nowMs()
-        val periodMs = (1000L / config.targetFps).coerceAtLeast(1L)
         val thread = Thread({
             while (running) {
+                val cycleStartMs = MonotonicClock.nowMs()
                 try {
-                    tick(MonotonicClock.nowMs())
+                    tick(cycleStartMs)
                 } catch (error: InterruptedException) {
                     Thread.currentThread().interrupt()
                     break
@@ -184,8 +242,12 @@ class MirrorPipeline(
                     // A pipeline stage must never kill the stream; record and continue.
                     lastError = error.message ?: error.toString()
                 }
+                // The period is recomputed every cycle so a §6 frame-rate change takes effect on the next
+                // frame, and a frame that overran its period is not padded with a whole extra one.
+                val elapsedMs = MonotonicClock.nowMs() - cycleStartMs
+                val periodMs = 1000L / effectiveTargetFps().coerceAtLeast(1)
                 try {
-                    Thread.sleep(periodMs)
+                    Thread.sleep((periodMs - elapsedMs).coerceAtLeast(MIN_PERIOD_MS))
                 } catch (interrupted: InterruptedException) {
                     Thread.currentThread().interrupt()
                     break
@@ -234,8 +296,21 @@ class MirrorPipeline(
             return false
         }
         counters.captured.incrementAndGet()
+        applyRateControlQuality()
 
-        val encoded = encoder.encode(captureResult, captureResult.timestampNs / 1_000L)
+        var encoded = encoder.encode(captureResult, captureResult.timestampNs / 1_000L)
+
+        // `04-video.md` §6: over the receiver's budget the frame MUST be re-encoded smaller, not sent —
+        // sending it would waste the whole frame's bandwidth, because the watch drops it.
+        var reencodes = 0
+        while (encoded != null && encoded.sizeBytes > maxFrameBytes && reencodes < MAX_OVERSIZE_REENCODES) {
+            val retryQuality = rateControl?.shrinkForOversize(nowMs) ?: break
+            if (!encoder.setQuality(retryQuality)) break
+            appliedQuality = retryQuality
+            encoded = encoder.encode(captureResult, captureResult.timestampNs / 1_000L)
+            reencodes++
+        }
+
         if (encoded == null) {
             counters.skipped.incrementAndGet()
             lastError = encoder.lastError ?: "encoder produced no frame"
@@ -245,10 +320,9 @@ class MirrorPipeline(
         counters.encoded.incrementAndGet()
 
         if (encoded.sizeBytes > maxFrameBytes) {
-            // `04-video.md` §6: over the receiver's budget the frame MUST be re-encoded smaller, not
-            // sent. Without a rate-control loop we drop it and say why.
             counters.skipped.incrementAndGet()
-            lastError = "frame of ${encoded.sizeBytes} B exceeds STREAM.max_frame_bytes $maxFrameBytes"
+            lastError = "frame of ${encoded.sizeBytes} B exceeds STREAM.max_frame_bytes $maxFrameBytes " +
+                "after ${reencodes + 1} encode(s)"
             rollWindow(nowMs)
             return false
         }
@@ -295,14 +369,14 @@ class MirrorPipeline(
 
         counters.sent.incrementAndGet()
         counters.chunks.addAndGet(sentChunks.toLong())
+        rateControl?.onFrameSent()
         lastCaptureNs = captureResult.timestampNs
         val latencyMs = (MonotonicClock.nowMs() - captureResult.timestampNs / 1_000_000L).toDouble()
         rollWindow(nowMs, bytes = encoded.sizeBytes.toLong(), latencyMs = latencyMs)
         return true
     }
 
-    private fun rollWindow(nowMs: Long, bytes: Long = 0L, latencyMs: Double = 0.0, sent: Boolean = true) {
-        if (windowStartMs == 0L) windowStartMs = nowMs
+    private fun rollWindow(nowMs: Long, bytes: Long = 0L, latencyMs: Double = 0.0, sent: Boolean = true) {        if (windowStartMs == 0L) windowStartMs = nowMs
         if (sent) {
             windowFrames++
             windowSamples++
@@ -355,6 +429,20 @@ class MirrorPipeline(
     companion object {
         /** Width of the frame-rate averaging window. */
         const val RATE_WINDOW_MS: Long = 1_000L
+
+        /**
+         * Shortest pause between pipeline cycles. A frame that overran its period still yields once, so
+         * the thread cannot spin at full speed against a saturated transport.
+         */
+        const val MIN_PERIOD_MS: Long = 4L
+
+        /**
+         * How many times an oversized frame is re-encoded before it is dropped.
+         *
+         * Three attempts × 10 quality steps covers 85 → 40, the whole allowed range of §6, so a frame
+         * that is still too large after this is too large for any permitted quality.
+         */
+        const val MAX_OVERSIZE_REENCODES: Int = 3
     }
 }
 

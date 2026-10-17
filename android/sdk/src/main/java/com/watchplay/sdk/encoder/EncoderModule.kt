@@ -79,6 +79,19 @@ interface EncoderModule {
     /** Requests a keyframe as soon as the codec can produce one. A no-op for MJPEG. */
     fun requestKeyframe()
 
+    /**
+     * Changes the quality of subsequent frames without re-preparing the codec.
+     *
+     * `04-video.md` §6 requires this to be a runtime knob: a re-prepare costs frames, and on H.264 it
+     * also forces a new IDR. An encoder that is not quality-driven (bitrate-driven H.264, or a stub that
+     * cannot encode at all) returns `false` and keeps its current settings — that is not an error, and
+     * the pipeline keeps streaming.
+     *
+     * @param quality the §6 quality, `40..85`.
+     * @return `true` when the next [encode] call uses it.
+     */
+    fun setQuality(quality: Int): Boolean = false
+
     /** Stops the codec and frees its buffers. Safe to call more than once. */
     fun release()
 }
