@@ -682,6 +682,7 @@ data class Capabilities(
         fun referenceWatch(
             deviceId: ByteArray = ByteArray(DeviceInfo.SIZE_BYTES_CHIP_ID),
             nonce: Long = 0L,
+            display: DisplayCaps = referenceDisplay(),
         ): Capabilities = Capabilities(
             deviceInfo = DeviceInfo(
                 protoVersion = ProtocolVersion.CURRENT,
@@ -691,17 +692,7 @@ data class Capabilities(
                 chipId = deviceId,
                 buildId = 1L,
             ),
-            display = DisplayCaps(
-                widthPx = 466,
-                heightPx = 466,
-                shape = ScreenShape.ROUND,
-                colorFormat = ColorFormat.RGB565_BE,
-                safeInsetPermille = 140,
-                refreshHz = 60,
-                tearingMode = 1,
-                brightnessLevels = 16,
-                panelId = 0L,
-            ),
+            display = display,
             mjpeg = MjpegCaps(subsampling = 2, minQuality = 40, maxQuality = 90, maxFps = 15),
             input = InputCaps(touchPoints = 1, reportRateHz = 60, hasHaptics = true, buttons = 0),
             audio = AudioCaps(codecs = 0, path = AudioCaps.PATH_NONE, volumeLevels = 0),
@@ -714,5 +705,29 @@ data class Capabilities(
             ),
             sensors = SensorsCaps(accelerometer = true, gyroscope = false, heartRate = false, compass = true),
         ).also { require(nonce in 0L..0xFFFFFFFFL) { "nonce out of u32 range" } }
+
+        /**
+         * The `DISPLAY` TLV of the reference watch, or of a panel a caller wants to pretend to be.
+         *
+         * The demo uses this to render the same scene for a square panel
+         * (`--es shape square`); the safe inset falls back to the shape's own default so a caller only has
+         * to name the geometry it cares about (`06-rendering.md` §2.4).
+         */
+        fun referenceDisplay(
+            shape: ScreenShape = ScreenShape.ROUND,
+            widthPx: Int = 466,
+            heightPx: Int = widthPx,
+            safeInsetPermille: Int = if (shape == ScreenShape.ROUND) 140 else 40,
+        ): DisplayCaps = DisplayCaps(
+            widthPx = widthPx,
+            heightPx = heightPx,
+            shape = shape,
+            colorFormat = ColorFormat.RGB565_BE,
+            safeInsetPermille = safeInsetPermille,
+            refreshHz = 60,
+            tearingMode = 1,
+            brightnessLevels = 16,
+            panelId = 0L,
+        )
     }
 }

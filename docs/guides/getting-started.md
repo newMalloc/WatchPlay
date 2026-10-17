@@ -170,6 +170,10 @@ cd android
 ![Demo 运行中](demo-frame-preview.png)
 
 - 卡片里是 466×466 的 [`demo-scene.html`](../../examples/watch-ui/demo-scene.html)，和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
+- **卡片是屏幕形状，不是圆角矩形**：圆屏裁成圆形，方屏按手表上报的 `safe_inset_permille` 取圆角半径（协议不带 corner radius，表盘留出的那条边就是它的角），方屏的直角屏则保持直角。缩略图与 **Enlarge** 的 1:1 对话框同形——`06-rendering.md` §2.2 里圆屏的四角物理上不存在，画出来就是在显示手表永远发不出的像素。想用方屏看同一个场景：
+  ```pwsh
+  adb shell am start -n com.watchplay.demo/.MainActivity --es shape square
+  ```
 - 四个 chip 是实时数字：会话状态（`LIVE`）、`fps`、`latency`、剩余 credit。
 - **Frame to send** 那一行的小图是**刚编码完、即将发给手表的那一帧**：把 JPEG 解回来画出来，就是手表会显示的样子；右侧写着帧号、尺寸、字节数、分块数（上图是 `#111 · 466×466` / `9 kB · 46 chunks`）。
 - **Enlarge** 用对话框按 1:1 显示某一帧。对话框是独立窗口，所以它不会落进捕获区域——任何盖在场景上的东西都会被 `PixelCopy` 一起抓走，预览就会拍到它自己。
@@ -194,7 +198,9 @@ cd android
 | 场景 | 只画：封面圆盘、标题一行截断、播放/暂停字形、进度条宽度 = `progress × 100%`。它自己不算时间也不做动画 |
 | 播控 | 点手表上的三键 → `TOUCH` → 原生 `MotionEvent` → 场景的 click → `window.watchplayHost.onControl("play")` → App 调 `MediaPlayer`。命中判定留在场景里（7 mm 目标在那儿），App 不复制几何 |
 
-封面是真封面，不是渐变：`MediaMetadataRetriever.embeddedPicture` 取曲目的内嵌图，居中裁方后缩到 96×96、质量 80，编成 `data:image/jpeg;base64,…`（实测 2.4 kB）。**必须是 `data:` URI**——场景跑在 `blockNetworkLoads = true` 下，`content://` 与 `http://` 的图会被直接拒掉。手机只在换歌时推一次，场景侧的 `setCover()` 自己去重；曲目没有内嵌图时推空串，场景退回 `conic-gradient` 的黑胶纹。
+封面是真封面，不是渐变。手机按三条路依次找图：曲目内嵌图（`MediaMetadataRetriever.embeddedPicture`）→ 系统媒体库生成的缩略图（`loadThumbnail`）→ 厂商仍保留的 `content://media/external/audio/albumart/<album_id>`。找到后居中裁方、缩到 96×96、质量 80，编成 `data:image/jpeg;base64,…`（实测 2.4 kB）。**必须是 `data:` URI**——场景跑在 `blockNetworkLoads = true` 下，`content://` 与 `http://` 的图会被直接拒掉。手机只在换歌时推一次，场景侧的 `setCover()` 自己去重；三条路都没有图时推空串，场景退回 `conic-gradient` 的黑胶纹（`adb logcat -s WatchPlayMusic` 会写明是哪条路取到的、或者一条都没取到）。
+
+实测一台真机：抽查 12 首，内嵌图 **0** 首、媒体库缩略图 **0** 首，`content://media/external/audio/albumart` 端点已返回错误——下载/转码来的歌大多没有图，此时就是黑胶纹。**按标题/歌手去网上查封面不在协议范围内**，接不接是宿主 App 的决定：那会把一个本地投屏库变成需要外部服务的库。
 
 音频**不上手表**：BLE 没有 A2DP 通路，`00-overview.md` §6 也是这么定的——手表只是遥控器。
 

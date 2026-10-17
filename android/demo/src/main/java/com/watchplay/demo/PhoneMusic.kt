@@ -8,9 +8,11 @@ import android.media.AudioAttributes
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
+import android.util.Size
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -155,6 +157,7 @@ class PhoneMusic(private val context: Context) : DemoMusic {
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.ALBUM_ID,
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
             "${MediaStore.Audio.Media.DURATION} > ${MIN_TRACK_MS}"
@@ -171,6 +174,7 @@ class PhoneMusic(private val context: Context) : DemoMusic {
                 val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                 val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 while (cursor.moveToNext() && tracks.size < MAX_TRACKS) {
                     val id = cursor.getLong(idColumn)
                     tracks += Track(
@@ -180,6 +184,7 @@ class PhoneMusic(private val context: Context) : DemoMusic {
                             it.isEmpty() || it == MediaStore.UNKNOWN_STRING
                         }.orEmpty(),
                         durationMs = cursor.getLong(durationColumn),
+                        albumId = cursor.getLong(albumColumn),
                     )
                 }
             }
@@ -255,7 +260,17 @@ class PhoneMusic(private val context: Context) : DemoMusic {
     }
 
     /**
-     * Reads the track's embedded picture as a `data:` URI, or `null` when it has none.
+     * Reads the track's artwork as a `data:` URI, or `null` when nothing can be found.
+     *
+     * Three sources, in the order a phone can actually reach them:
+     *
+     *  1. the picture embedded in the file (`MediaMetadataRetriever.embeddedPicture`) — what an album rip
+     *     carries;
+     *  2. `ContentResolver.loadThumbnail` (`API 29+`), where the media provider generates the thumbnail
+     *     itself — this is what makes tracks without an embedded picture show art on devices whose provider
+     *     extracts it;
+     *  3. the legacy `content://media/external/audio/albumart/<album_id>` path, still served by some
+     *     vendor providers.
      *
      * A `content://` thumbnail cannot be handed to the scene: `06-rendering.md` §3.2 sets
      * `blockNetworkLoads = true`, so the document makes no requests and the phone is the one that reads
@@ -267,14 +282,23 @@ class PhoneMusic(private val context: Context) : DemoMusic {
      * disc for them.
      */
     private fun readCover(track: Track): String? {
+        embeddedCover(track)?.let { return it }
+        providerThumbnail(track)?.let { return it }
+        legacyAlbumArt(track)?.let { return it }
+        Log.i(TAG, "no cover art for ${track.title}: embedded, provider and album_art all empty")
+        return null
+    }
+
+    /** The picture inside the file itself. */
+    private fun embeddedCover(track: Track): String? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, track.uri)
             val picture = retriever.embeddedPicture ?: return null
-            encodeThumbnail(picture)
+            encodeThumbnail(picture, "embedded")
         } catch (error: Exception) {
             // A corrupt picture must not cost the user their music.
-            Log.w(TAG, "no cover art for ${track.title}", error)
+            Log.w(TAG, "no embedded picture for ${track.title}", error)
             null
         } finally {
             try {
@@ -285,8 +309,41 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         }
     }
 
-    /** Decodes an embedded picture down to [COVER_PX]² and returns it as a `data:` URI. */
-    private fun encodeThumbnail(picture: ByteArray): String? {
+    /** The provider's own thumbnail, which it may synthesise for tracks that carry no picture. */
+    private fun providerThumbnail(track: Track): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            val bitmap = context.contentResolver.loadThumbnail(
+                track.uri,
+                Size(COVER_PX, COVER_PX),
+                null,
+            ) ?: return null
+            try {
+                encodeBitmap(bitmap, "provider")
+            } finally {
+                bitmap.recycle()
+            }
+        } catch (error: Exception) {
+            // `IOException` for "no thumbnail", `SecurityException` when the provider says no.
+            null
+        }
+    }
+
+    /** The album-art row some vendor providers still export. */
+    private fun legacyAlbumArt(track: Track): String? {
+        if (track.albumId <= 0L) return null
+        val uri = ContentUris.withAppendedId(ALBUM_ART_URI, track.albumId)
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                encodeThumbnail(stream.readBytes(), "album_art")
+            }
+        } catch (error: Exception) {
+            null
+        }
+    }
+
+    /** Decodes a picture down to [COVER_PX]² and returns it as a `data:` URI. */
+    private fun encodeThumbnail(picture: ByteArray, source: String): String? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(picture, 0, picture.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -294,15 +351,23 @@ class PhoneMusic(private val context: Context) : DemoMusic {
             inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
         }
         val decoded = BitmapFactory.decodeByteArray(picture, 0, picture.size, options) ?: return null
-        val thumbnail = squareThumbnail(decoded)
+        return try {
+            encodeBitmap(decoded, source)
+        } finally {
+            decoded.recycle()
+        }
+    }
+
+    /** Re-encodes an already decoded picture; [source] only names it in the log. */
+    private fun encodeBitmap(bitmap: Bitmap, source: String): String? {
+        val thumbnail = squareThumbnail(bitmap)
         return try {
             val jpeg = ByteArrayOutputStream(COVER_PX * COVER_PX)
             if (!thumbnail.compress(Bitmap.CompressFormat.JPEG, COVER_QUALITY, jpeg)) return null
-            Log.i(TAG, "cover art: ${thumbnail.width}x${thumbnail.height} ${jpeg.size()} B JPEG")
+            Log.i(TAG, "cover art from $source: ${thumbnail.width}x${thumbnail.height} ${jpeg.size()} B JPEG")
             COVER_PREFIX + Base64.encodeToString(jpeg.toByteArray(), Base64.NO_WRAP)
         } finally {
-            if (thumbnail !== decoded) thumbnail.recycle()
-            decoded.recycle()
+            if (thumbnail !== bitmap) thumbnail.recycle()
         }
     }
 
@@ -349,6 +414,7 @@ class PhoneMusic(private val context: Context) : DemoMusic {
         val title: String,
         val artist: String,
         val durationMs: Long,
+        val albumId: Long,
     )
 
     companion object {
@@ -371,5 +437,13 @@ class PhoneMusic(private val context: Context) : DemoMusic {
 
         /** Scheme the scene needs, since it cannot fetch anything itself. */
         private const val COVER_PREFIX = "data:image/jpeg;base64,"
+
+        /**
+         * Album-art endpoint some vendor providers still answer.
+         *
+         * Removed from AOSP in Android 10 in favour of provider thumbnails, which is why it is the last
+         * fallback rather than the first.
+         */
+        private val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
     }
 }

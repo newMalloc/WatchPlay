@@ -34,8 +34,11 @@ import com.watchplay.sdk.encoder.MjpegEncoder
 import com.watchplay.sdk.pipeline.PipelineConfig
 import com.watchplay.sdk.pipeline.PipelineFrame
 import com.watchplay.sdk.pipeline.PipelineStats
+import com.watchplay.sdk.protocol.Capabilities
+import com.watchplay.sdk.protocol.ScreenShape
 import com.watchplay.sdk.render.UIRenderModule
 import com.watchplay.sdk.render.WatchLayoutSpec
+import com.watchplay.sdk.render.WatchScreenShape
 import com.watchplay.sdk.render.WebViewRenderModule
 import com.watchplay.sdk.session.SessionConfig
 import com.watchplay.sdk.session.SessionState
@@ -87,6 +90,12 @@ class MainActivity :
     private lateinit var render: WebViewRenderModule
     private lateinit var sceneApp: DemoSceneApp
     private lateinit var music: PhoneMusic
+
+    /**
+     * The panel being mirrored. Fixed for the whole activity: the SDK's render module refuses a layout
+     * change without a new module, which means a scene reload.
+     */
+    private lateinit var layout: WatchLayoutSpec
     private lateinit var statsView: TextView
     private lateinit var toggleButton: TextView
     private lateinit var watchButton: TextView
@@ -160,7 +169,8 @@ class MainActivity :
         music = PhoneMusic(this)
 
         sceneView = createSceneWebView()
-        render = WebViewRenderModule(DEMO_LAYOUT, this)
+        layout = panelFrom(intent)
+        render = WebViewRenderModule(layout, this)
         render.attach(sceneView)
         // The scene turns a click on its controls into a command; see SceneBridge for why the touch path
         // itself stays native.
@@ -173,13 +183,26 @@ class MainActivity :
             },
             SCENE_BRIDGE,
         )
-        findViewById<FrameLayout>(R.id.scene_container).addView(
+        val sceneContainer = findViewById<FrameLayout>(R.id.scene_container)
+        sceneContainer.addView(
             sceneView,
             // Laid out at the panel's pixel size, so the captured bitmap and the encoded frame are the
             // size the watch negotiated: a 466 px WebView under a density-160 context is a 466 CSS px
             // viewport, and `1vmin` in the scene is then exactly 1% of the panel (06-rendering.md §3.2).
-            FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER),
+            FrameLayout.LayoutParams(layout.widthPx, layout.heightPx, Gravity.CENTER),
         )
+        // The card around the scene is the panel outline, not a rounded rectangle: on a round panel the
+        // corners of the square picture do not exist on the watch.
+        maskToPanel(
+            sceneContainer,
+            layout,
+            fillColor = ContextCompat.getColor(this, R.color.wp_card),
+            strokeWidthPx = (resources.displayMetrics.density).toInt(),
+            strokeColor = ContextCompat.getColor(this, R.color.wp_line),
+        )
+        maskToPanel(previewView, layout, fillColor = ContextCompat.getColor(this, R.color.wp_card_soft))
+        // A non-square panel must not be squeezed into a square thumbnail.
+        previewView.fitPanelAspect(layout)
         sceneApp = DemoSceneApp(readSceneHtml(), music)
         registerBattery()
 
@@ -345,7 +368,19 @@ class MainActivity :
      */
     private fun startLoopbackMirroring() {
         val (phone, watch) = LoopbackTransport.pair(phoneId = "demo-phone", watchId = "demo-watch")
-        val stub = DemoWatchStub(watch)
+        // The scripted watch claims exactly the panel this activity renders for: a session whose
+        // `CAPS_ACK` disagreed with the render module's layout would be refused.
+        val stub = DemoWatchStub(
+            watch,
+            Capabilities.referenceWatch(
+                display = Capabilities.referenceDisplay(
+                    shape = layout.shape,
+                    widthPx = layout.widthPx,
+                    heightPx = layout.heightPx,
+                    safeInsetPermille = layout.safeInsetPermille,
+                ),
+            ),
+        )
         linkLabel = "loopback (scripted watch)"
         startMirroring(phone, stub)
     }
@@ -514,9 +549,10 @@ class MainActivity :
         val stage = FrameLayout(this).apply {
             addView(
                 image,
-                FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER),
+                FrameLayout.LayoutParams(layout.widthPx, layout.heightPx, Gravity.CENTER),
             )
         }
+        maskToPanel(stage, layout, fillColor = ContextCompat.getColor(this, R.color.wp_bg))
         AlertDialog.Builder(this)
             .setTitle(
                 getString(R.string.frame_label, frame.frameId, frame.encoded.width, frame.encoded.height) +
@@ -598,8 +634,7 @@ class MainActivity :
     // ---------------------------------------------------------------- UIRenderModule.UIRenderListener
 
     override fun onSceneReady(sceneId: String, layout: WatchLayoutSpec) {
-        sceneStatus = "$sceneId ${layout.widthPx}x${layout.heightPx} " +
-            "${layout.shape.name.lowercase()} inset=${layout.cssSafeInsetValue}"
+        sceneStatus = "$sceneId " + WatchScreenShape.describe(layout) + " inset=${layout.cssSafeInsetValue}"
         handler.post { renderStats() }
     }
 
@@ -693,11 +728,38 @@ class MainActivity :
         /** Mean luma below this (0..255) means the frame carries no visible content. */
         private const val BLANK_LUMA_THRESHOLD = 4
 
-        /**
-         * The panel the demo renders for. `WebViewRenderModule` refuses a layout that differs from the one
-         * it was built with, and the session's own layout comes from `CAPS_ACK`, so the demo assumes the
-         * reference panel the scripted watch reports: 466×466 round, 140‰ (`Capabilities.referenceWatch`).
-         */
-        private val DEMO_LAYOUT: WatchLayoutSpec = WatchLayoutSpec.round()
+        /** Intent extra naming the panel shape: `round` (default), `square` or `sharp`. */
+        private const val EXTRA_SHAPE = "shape"
+
+        /** Side of the non-reference panels `--es shape` can ask for. */
+        private const val SHAPE_PANEL_PX = 466
+    }
+
+    /**
+     * The panel this run mirrors, defaulting to the reference watch.
+     *
+     * `WebViewRenderModule` refuses a layout that differs from the one it was built with and the session's
+     * layout comes from `CAPS_ACK`, so the scripted watch is told the same geometry
+     * ([startLoopbackMirroring]). Being able to start a square panel is what makes the round/square branch
+     * of the scene observable on a phone at all:
+     *
+     * ```
+     * adb shell am start -n com.watchplay.demo/.MainActivity --es shape square
+     * ```
+     */
+    private fun panelFrom(intent: Intent): WatchLayoutSpec = when (intent.getStringExtra(EXTRA_SHAPE)) {
+        "square" -> WatchLayoutSpec.rectangular(
+            widthPx = SHAPE_PANEL_PX,
+            heightPx = SHAPE_PANEL_PX,
+            shape = ScreenShape.ROUNDED_RECT,
+        )
+
+        "sharp" -> WatchLayoutSpec.rectangular(
+            widthPx = SHAPE_PANEL_PX,
+            heightPx = SHAPE_PANEL_PX,
+            shape = ScreenShape.RECTANGULAR,
+        )
+
+        else -> WatchLayoutSpec.round()
     }
 }
