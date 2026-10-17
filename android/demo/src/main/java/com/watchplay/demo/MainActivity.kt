@@ -1,8 +1,13 @@
 package com.watchplay.demo
 
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -116,6 +121,7 @@ class MainActivity :
             FrameLayout.LayoutParams(DEMO_LAYOUT.widthPx, DEMO_LAYOUT.heightPx, Gravity.CENTER),
         )
         sceneApp = DemoSceneApp(readSceneHtml())
+        registerBattery()
 
         toggleButton.setOnClickListener {
             if (client == null) startLoopbackMirroring() else stopMirroring()
@@ -125,6 +131,7 @@ class MainActivity :
 
     override fun onDestroy() {
         handler.removeCallbacks(statsTicker)
+        unregisterReceiver(batteryReceiver)
         scanner.stop()
         stopMirroring()
         // The module owns the WebView; it destroys it on the handler.
@@ -170,6 +177,26 @@ class MainActivity :
         Log.e(TAG, "cannot read $SCENE_ASSET", error)
         lastError = "cannot read $SCENE_ASSET: ${error.message}"
         "<html><body style=\"background:#05070c\"></body></html>"
+    }
+
+    /**
+     * Feeds the scene the phone's real battery level, since the watch face shows it.
+     *
+     * `ACTION_BATTERY_CHANGED` is sticky: registering delivers the current value immediately, so the first
+     * pushed frame already carries a real number instead of the scene's placeholder.
+     */
+    private fun registerBattery() {
+        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        ContextCompat.registerReceiver(this, batteryReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            if (level < 0 || scale <= 0) return
+            sceneApp.batteryPercent = level * 100 / scale
+        }
     }
 
     /**

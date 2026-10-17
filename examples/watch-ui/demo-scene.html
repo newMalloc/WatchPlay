@@ -184,7 +184,7 @@ html,body{
     <div class="face-top">
       <div class="face-time" id="clock">10:09</div>
       <div class="face-date" id="date">周一 3 月 2 日</div>
-      <div class="face-status">电量 82% · 步数 6,240</div>
+      <div class="face-status">电量 <span id="battery">82</span>% · 步数 6,240</div>
     </div>
 
     <div class="tabs">
@@ -201,11 +201,11 @@ html,body{
     <div class="cover"><i></i></div>
 
     <div class="track">
-      <div class="track-title">夜航西飞</div>
-      <div class="track-artist">林 · WatchPlay Sessions</div>
+      <div class="track-title" id="track-title">夜航西飞</div>
+      <div class="track-artist" id="track-artist">林 · WatchPlay Sessions</div>
     </div>
 
-    <div class="progress"><i></i></div>
+    <div class="progress"><i id="progress-bar"></i></div>
 
     <div class="controls">
       <button class="btn-ctl" data-ctl="prev" aria-label="上一首">⏮</button>
@@ -236,17 +236,17 @@ html,body{
 
   <div class="overlay">
     <div class="turn-card">
-      <div class="turn-arrow">↰</div>
+      <div class="turn-arrow" id="turn-arrow">↰</div>
       <div class="turn-text">
-        <div class="turn-distance">280 米</div>
-        <div class="turn-street">左转 · 深南大道</div>
+        <div class="turn-distance" id="turn-distance">280 米</div>
+        <div class="turn-street" id="turn-street">左转 · 深南大道</div>
       </div>
     </div>
 
     <div class="map-foot">
       <span class="dot"></span>
-      <span>剩余 <b>2.4</b> 公里</span>
-      <span>预计 <b>9</b> 分钟</span>
+      <span>剩余 <b id="remaining">2.4</b> 公里</span>
+      <span>预计 <b id="eta">9</b> 分钟</span>
     </div>
 
     <div class="tabs">
@@ -302,17 +302,44 @@ html,body{
     }
   });
 
-  // 手机从外部切页的入口：SceneUpdate(javascript = "window.watchplay.go('map')")。
-  window.watchplay = { go: show, current: function () { return active; } };
+  // ------------------------------------------------------------------ 手机推来的数据
+  //
+  // 手机的 MirrorApp 每秒调一次 UIRenderModule.applyUpdate：先把键值塞进 window.watchplay.data，
+  // 再执行一句 watchplay.render()。场景这边只做"把状态写进 DOM"，不自己算时间、不算进度——
+  // 捕获可能发生在任意时刻，帧的内容必须由手机给出的状态唯一决定（06-rendering.md §3.7）。
+  var driven = false;
 
-  // 走时：一秒一次，远低于捕获帧率。
+  function setText(id, value) {
+    if (value === undefined || value === null) return;
+    var el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  }
+
+  function render() {
+    var d = window.watchplay.data || {};
+    if (d.clock !== undefined) { setText("clock", d.clock); driven = true; }
+    setText("date", d.date);
+    setText("battery", d.battery);
+    setText("track-title", d.title);
+    setText("track-artist", d.artist);
+    setText("turn-arrow", d.maneuver);
+    setText("turn-distance", d.distance);
+    setText("turn-street", d.road);
+    setText("remaining", d.remaining);
+    setText("eta", d.eta);
+  }
+
+  // 手机从外部切页的入口：SceneUpdate(javascript = "window.watchplay.go('map')")。
+  window.watchplay = { go: show, current: function () { return active; }, render: render };
+
+  // 没有被手机驱动时自己走时，只为了浏览器预览与截图看起来是活的；第一次收到数据后就交给手机。
   function tick() {
+    if (driven) return;
     var now = new Date();
     var hh = String(now.getHours()).padStart(2, "0");
     var mm = String(now.getMinutes()).padStart(2, "0");
-    document.getElementById("clock").textContent = hh + ":" + mm;
-    document.getElementById("date").textContent =
-      "周" + "日一二三四五六"[now.getDay()] + " " + (now.getMonth() + 1) + " 月 " + now.getDate() + " 日";
+    setText("clock", hh + ":" + mm);
+    setText("date", "周" + "日一二三四五六"[now.getDay()] + " " + (now.getMonth() + 1) + " 月 " + now.getDate() + " 日");
   }
   tick();
   setInterval(tick, 1000);

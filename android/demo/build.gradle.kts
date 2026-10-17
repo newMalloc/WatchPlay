@@ -77,4 +77,5 @@ dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
+    testImplementation(libs.junit)
 }

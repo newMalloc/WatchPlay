@@ -152,7 +152,7 @@ sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 
 ```pwsh
 cd android
-./gradlew :sdk:test          # 106 项协议逻辑单元测试，不需要设备
+./gradlew :sdk:test          # 118 项协议逻辑单元测试，不需要设备
 ./gradlew :sdk:assembleDebug
 ```
 
@@ -167,11 +167,13 @@ cd android
 
 在设备上打开 Demo App，点 **Start mirroring**。你会看到：
 
-- 上方 WebView 里是 [`examples/watch-ui/demo-scene.html`](../../examples/watch-ui/demo-scene.html)——和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。上面三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
-- 下方的统计文本持续刷新：`fps`、`bytes/s`、`dropped`、`latency`，外加 `scene:`（场景就绪后的面板参数）与 `paint requests:`（`applyUpdate` 触发的合成完成回调计数）
+- 上方 WebView 里是 [`examples/watch-ui/demo-scene.html`](../../examples/watch-ui/demo-scene.html)——和浏览器预览是同一个文件，经 `:sdk` 的 `WebViewRenderModule` 加载（安全区按 `CAPS` 注入）。三个页面（表盘 / 音乐 / 导航）点按互切，每页只给另外两页的入口。
+- 表盘上显示的是**这台手机**的时间和电量：`DemoSceneApp.pollUpdate` 每秒把它们推给场景，走的是 `MirrorApp` → `SceneUpdate` → `window.watchplay.render()` 这条路，不是场景自己算的。
+- 导航页是一条 2.4 公里的脚本路线（左转 → 直行 → 右转 → 到达），距离每秒倒数，走完一轮重来。
+- 下方的统计文本持续刷新：`fps`、`bytes/s`、`dropped`、`latency`，外加 `scene:`（场景就绪后的面板参数）与 `paint requests:`（每秒一次数据推送触发的合成完成回调计数，随推送增长即说明 `applyUpdate` 生效）
 - 因为走的是 loopback，`latency` 只反映管线内部开销，不含蓝牙
 
-**这一步能验证**：WebView 渲染是否正常、`PixelCopy` 捕获是否出图、编码器是否初始化成功、分块与 Credit 逻辑是否自洽。**不能验证**：真实蓝牙吞吐与手表解码性能。
+**这一步能验证**：WebView 渲染是否正常、`PixelCopy` 捕获是否出图、编码器是否初始化成功、分块与 Credit 逻辑是否自洽、`applyUpdate` 是否真的把数据送进了 DOM。**不能验证**：真实蓝牙吞吐与手表解码性能。
 
 ### 用第二台 Android 设备当手表（真实 BLE 链路）
 

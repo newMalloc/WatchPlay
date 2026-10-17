@@ -84,4 +84,4 @@ jobs:
 
       - name: Build and test
         working-directory: android
-        run: ./gradlew :sdk:assembleDebug :sdk:test --no-daemon --stacktrace
+        run: ./gradlew :sdk:assembleDebug :sdk:test :demo:test --no-daemon --stacktrace

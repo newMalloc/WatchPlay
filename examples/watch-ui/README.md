@@ -28,6 +28,8 @@
 
 切换页面的逻辑在场景里，不在协议里：点按由场景自己处理，没有网络回环。手机要主动切页时走 `SceneUpdate.javascript = "window.watchplay.go('map')"`（`MirrorApp.Host.postUpdate`）。
 
+手机推来的状态走另一个入口：`SceneUpdate.data` 里的键值先落进 `window.watchplay.data`，再执行 `window.watchplay.render()`，场景只负责把值写进 DOM（时间、电量、转向、距离都是这样来的）。场景自己算时间只是为了让浏览器预览看起来是活的，第一次收到数据后就停手——捕获可能发生在任意时刻，帧的内容必须由手机给出的状态唯一决定（`06-rendering.md` §3.7）。
+
 ## 浏览器预览（带圆形手表外壳）
 
 [`preview/index.html`](preview/index.html) 把 `demo-scene.html` 装进一个 466×466 的 iframe，外面套圆形开孔，旁边有「场景 / 圆屏方屏 / 安全区」三组开关。用 iframe 是为了让 `vmin` 有个 466×466 的视口可算——真机上视口就是表盘。
