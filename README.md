@@ -6,9 +6,9 @@
 
 [协议规范](docs/spec/00-overview.md) · [快速开始](docs/guides/getting-started.md) · [贡献指南](CONTRIBUTING.md)
 
-![WatchPlay 介绍动画](docs/video/preview.gif)
+https://github.com/user-attachments/assets/4c5a509c-e545-4814-9243-6bca52fac498
 
-[完整视频](docs/video/WatchPlay-intro-1080p.mp4)（53 秒，1920×1080，带背景音）· 画面不是录屏：它由 [docs/video/index.html](docs/video/index.html) 按时间轴逐帧渲染再编码，片中每一帧手表画面都是 `examples/watch-ui` 里那份 HTML 的真实渲染。
+53 秒，1920×1080，带背景音 · 画面不是录屏：它由 [docs/video/index.html](docs/video/index.html) 按时间轴逐帧渲染再编码，片中每一帧手表画面都是 `examples/watch-ui` 里那份 HTML 的真实渲染。
 
 ---
 

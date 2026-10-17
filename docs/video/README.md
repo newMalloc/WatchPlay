@@ -6,13 +6,17 @@
 
 ## 成品
 
-| 文件 | 说明 |
+| 文件 / 位置 | 说明 |
 | :--- | :--- |
-| `WatchPlay-intro-1080p.mp4` | 1920×1080 @ 30 fps，约 5 MB，带背景音 |
-| `preview.gif` | 960 px 宽、8 秒，README 首屏用的无声预览 |
-| `poster.png` | 封面帧（15.6 s），README 与分享用 |
+| [issue #1](https://github.com/newMalloc/WatchPlay/issues/1) 里的评论附件 | README 首屏的播放器指向它，`user-attachments` 链接，5.0 MB |
+| `WatchPlay-intro-1080p.mp4` | 同一支片子的仓库副本：1920×1080 @ 30 fps，4.78 MB，带背景音 |
+| `preview.gif` | 960 px 宽、7.4 秒的无声预览，聊天工具里转发用 |
+| `poster.png` | 封面帧（15.6 s），分享用 |
 
-> README 里不要写 `<video>` 标签：GitHub 的 Markdown 会把它剥掉。能直接在 README 里播的只有拖进 issue / 评论的附件（`user-attachments` 链接），其次是动图。所以首屏放 `preview.gif`，完整版靠链接。
+> **不要删 issue #1，也不要删那条评论**：README 里的播放器就是它的 `user-attachments` 链接，删了首屏就变成死链。
+>
+> README 里也不要写 `<video>` 标签：GitHub 的 Markdown 会把它剥掉。能内联播放的只有 issue / 评论附件，换附件用
+> `gh issue comment 1 --repo newMalloc/WatchPlay --attach <文件> --body "…"`，然后把 README 里那行 URL 换掉。
 
 ## 文件
 
