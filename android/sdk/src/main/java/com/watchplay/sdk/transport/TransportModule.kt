@@ -76,6 +76,8 @@ interface TransportListener {
  *  * [BleGattTransport] — the mandatory baseline bearer. Complete, unit-tested against a fake radio
  *    ([GattIo]); not yet exercised against hardware.
  *  * [BleL2capTransport] — API 29+ L2CAP CoC, higher throughput; skeleton (see its KDoc).
+ *  * [WifiTcpTransport] — Bearer C: the same frames over a TCP stream, with the resident parser §4.2
+ *    requires. Discovery is the host's job; §4.1 leaves the handover flow open.
  */
 interface TransportModule {
 

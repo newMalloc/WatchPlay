@@ -39,7 +39,7 @@ A 是基线，B 是省带宽的可选项。哪一档由协商按硬件能力决�
 | BLE GATT | 基线，任何支持 BLE 的设备 | 已实现（SDK + `android/sink`），未真机联调 |
 | BLE L2CAP CoC | 手机 Android 10+，开销低于 GATT | SDK 骨架，`open()` 未接通 |
 | 经典蓝牙 RFCOMM (SPP) | 只有 BR/EDR、没有可用 BLE 的设备 | 规范已定，未实现 |
-| Wi-Fi TCP | 需要高码率的场景 | 规范已定，未实现 |
+| Wi-Fi TCP | 需要高码率的场景 | 已实现（SDK `WifiTcpTransport`，本机回环测试）；发现与交接未实现 |
 
 ## 仓库结构
 

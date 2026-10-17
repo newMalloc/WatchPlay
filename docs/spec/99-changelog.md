@@ -123,7 +123,7 @@
 | 捕获时间戳可选（`V_TS_PRESENT`） | 端到端延迟只能靠 RTT 估计 | 可观测性不足，列为 v0.2 必改项 |
 | `TOUCH` 无应用层重传 | 只有定长 14 字节单点事件，依赖双侧超时兜底 | UI 最多卡 10 s 后自愈 |
 | 音频未进协议 | 只声明 `AUDIO.path`，A2DP 链路的建立流程未标准化 | 各家自行协商，见 [07-capabilities.md §5](07-capabilities.md) |
-| Wi-Fi 承载未实现 | 规范已写（[01-transport.md §4](01-transport.md)），无代码 | 高码率场景受限 |
+| Wi-Fi 交接流程未标准化 | TCP 承载本身已实现（SDK `WifiTcpTransport`），但 [01-transport.md §4.1](01-transport.md) 的发现与凭据交接（mDNS / BLE bootstrap）没有规范流程，见 [§11](01-transport.md) Q6 | 传输可用，建链仍要手工给出地址 |
 | 经典蓝牙承载未实现 | 规范已写（[01-transport.md §5](01-transport.md)），无代码、无参考硬件 | 只有 BR/EDR 的设备暂时无法接入 |
 | Profile B 无参考硬件验收 | 编码器是桩，且没有一块板能把 H.264 硬解跑起来 | B 档实际不可验证 |
 

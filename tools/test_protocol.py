@@ -103,8 +103,8 @@ class TestHeader(unittest.TestCase):
         raw = encode(FrameType.PING, seq=0x00000001)
         self.assertEqual(raw[8:12], b"\x01\x00\x00\x00")
 
-    def test_crc_covers_offsets_0_to_13_only(self):
-        # Changing the payload MUST NOT change hdr_crc.
+    def test_crc_does_not_cover_the_payload(self):
+        # The checksum input is the header only: changing the payload MUST NOT change hdr_crc.
         a = encode(FrameType.VIDEO, seq=5, payload=b"aaaa")
         b = encode(FrameType.VIDEO, seq=5, payload=b"bbbb")
         self.assertEqual(a[14:16], b[14:16])
