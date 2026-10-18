@@ -6,7 +6,7 @@
 
 [协议规范](docs/spec/00-overview.md) · [快速开始](docs/guides/getting-started.md) · [贡献指南](CONTRIBUTING.md)
 
-https://github.com/user-attachments/assets/4c5a509c-e545-4814-9243-6bca52fac498
+https://github.com/user-attachments/assets/ec42477a-4e65-4a8f-a666-1f538aa7994f
 
 ---
 
@@ -97,7 +97,7 @@ Android 与手表端构建见 [快速开始指南](docs/guides/getting-started.m
 | 里程碑 | 交付物 | 状态 |
 | :--- | :--- | :--- |
 | M1 | MJPEG 投屏 Demo | 手机端 SDK 与手表端 App 已实现（163 项 JVM 测试）；已在真机跑通 loopback：466×466 MJPEG @6–8 fps、`latency` 5–13 ms，Demo 内可看到即将发出的那一帧，画面与缩略图都按屏幕形状裁切（圆屏裁成圆形、方屏按上报的安全区取圆角半径）。BLE 双机未联调 |
-| M2 | 地图导航 + 音乐播放 | 场景三页已能互切；时间、电量、导航转向由手机每秒推送；音乐播的是手机自己的曲库（`MediaStore` + `MediaPlayer`），封面取曲目的内嵌图、以 96×96 `data:` URI 推给场景，手表上的播控回传生效。导航仍是脚本路线而非路径规划 |
+| M2 | 地图导航 + 音乐播放 | 场景三页已能互切；时间、电量、导航转向由手机每秒推送；音乐播的是手机自己的曲库（`MediaStore` + `MediaPlayer`），封面取曲目的内嵌图、以 96×96 `data:` URI 推给场景，手表上的播控回传生效。导航页接入真实定位与路径规划（`LocationManager` + 开源 OSRM，手机把折线投影后交给场景），无网络时退回脚本路线 |
 | M3 | H.264 + Wi-Fi 通道 | Wi-Fi 与经典蓝牙承载：规范已定，无实现；H.264：编码器是桩，且无硬解参考硬件 |
 | M4 | Android SDK | 可构建（67 项 JVM 测试），未发布 |
 | M5 | 协议 v1.0 + 认证计划 | 未开始 |

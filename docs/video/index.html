@@ -181,7 +181,7 @@
   <section class="scene" id="s4">
     <div style="position:absolute;left:64px;top:44px">
       <div class="eyebrow">线格式</div>
-      <div class="hd sm">一帧 8 123 字节，怎么过 244 字节的 MTU</div>
+      <div class="hd sm">一帧 8 123 字节，切成 37 块</div>
       <div class="sub">16 字节帧头 + 20 字节视频子头 + 至多 224 字节媒体数据</div>
     </div>
     <div id="s4Hdr" style="position:absolute;left:64px;top:268px"></div>
@@ -194,7 +194,7 @@
     <div id="s4Frame" style="position:absolute;left:64px;top:600px">
       <div style="font-size:19px;color:#9aa3ae;margin-bottom:12px">
         <span class="mono" style="color:var(--warm)">8 123 B</span> → <span class="mono" style="color:var(--accent)">37 块</span>
-        &nbsp;·&nbsp; 块 0–35 每块 244 B，块 36 只有 79 B
+        &nbsp;·&nbsp; 块 0–35 负载 244 B，块 36 负载 79 B（另加 16 B 帧头）
       </div>
       <div id="s4Chunks" style="display:flex;gap:3px"></div>
       <div style="display:flex;justify-content:space-between;width:1110px;margin-top:10px;font-size:16px;color:#7c8698">
@@ -222,7 +222,7 @@
       <div style="position:absolute;left:0;bottom:0;width:100%;height:1px;background:#233040"></div>
     </div>
     <div id="s5ChartNote" style="position:absolute;left:104px;top:852px;width:820px;font-size:18px;color:#7c8698">
-      466×466 的实测 JPEG 字节数（同一画面，只改质量）
+      466×466，同一帧画面只改 JPEG 质量
     </div>
     <div id="s5Panel" style="position:absolute;left:1010px;top:300px;width:846px">
       <div class="card" style="position:relative;left:0;top:0;width:100%">
@@ -279,7 +279,7 @@
   <section class="scene" id="s7">
     <div style="position:absolute;left:64px;top:44px">
       <div class="eyebrow">仓库</div>
-      <div class="hd sm">规范不是 PPT：每个字节都能跑</div>
+      <div class="hd sm">规范和它的断言，在同一个仓库</div>
       <div class="sub">docs/spec 是权威；tools/ 是可执行的断言；examples/protocol-traces 是提交进仓库的字节</div>
     </div>
     <div id="s7Cards" style="position:absolute;left:64px;top:296px;display:flex;gap:24px"></div>
@@ -480,7 +480,7 @@ function renderS2(t) {
   host.appendChild(el('div', '', '<span style="font-size:16px;color:#7c8698;letter-spacing:1px">JPEG 帧 →</span>')).style.cssText =
     'position:absolute;left:898px;top:588px;opacity:0';
   const stats = $('#s3Stats');
-  [['466×466', '屏幕'], ['7.0 fps', '实测帧率'], ['12 ms', '编码 + 回环'], ['11 kB', '每帧字节']].forEach(([v, l]) => {
+  [['466×466', '屏幕'], ['7.0 fps', '真机 loopback'], ['12 ms', '采集 → 发出'], ['11 kB', '每帧字节']].forEach(([v, l]) => {
     stats.appendChild(el('div', 'stat', '<div class="v">' + v + '</div><div class="l">' + l + '</div>'));
   });
 })();
@@ -733,7 +733,7 @@ const REPO_CARDS = [
   { k: '规范', v: '00–07', d: '9 章文档：帧头、CRC、会话、分块与 Credit、触控、渲染、能力位' },
   { k: '工具链', v: '49 项', d: 'tools/test_protocol.py；gen_traces.py 生成提交进仓库的 9 455 字节 trace' },
   { k: 'Android', v: '163 + 18', d: 'sdk 163 项 JVM 测试，demo 18 项；两个 App 都能直接出 Debug 包' },
-  { k: '承载', v: '4 条', d: 'BLE GATT 与 Wi-Fi TCP 已实现；L2CAP 骨架，经典蓝牙 SPP 规范已定' },
+  { k: '承载', v: '4 条', d: 'GATT 与 TCP 有实现（GATT 未双机联调）；L2CAP 骨架，SPP 只有规范' },
 ];
 (function () {
   const host = $('#s7Cards');
